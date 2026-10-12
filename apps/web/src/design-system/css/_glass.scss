@@ -1,0 +1,412 @@
+// ============================================================
+// CivicPulse Liquid Glass Material System
+// ============================================================
+// 5 Tiers of Liquid Glass Materials with multi-layer optics:
+// 1. Translucent background
+// 2. Backdrop blur & saturation boost
+// 3. Dual-ring subtle border (outer stroke + inner specular ridge)
+// 4. Soft spatial ambient shadow
+// 5. Ambient back-glow on focus & hover
+// ============================================================
+
+// ── Tier 1: Glass Ultra (Command Center Modals & Hero Sheets) ─
+.glass-ultra {
+  background: radial-gradient(120% 120% at 50% 0%, rgba(20, 42, 80, 0.72) 0%, rgba(8, 19, 38, 0.85) 100%);
+  backdrop-filter: blur(52px) saturate(205%);
+  -webkit-backdrop-filter: blur(52px) saturate(205%);
+  border: 1px solid var(--cp-glass-ultra-border);
+  box-shadow: 
+    inset 0 1.5px 1.5px 0 var(--cp-glass-specular-top),
+    inset 0 0 12px 0 rgba(159, 201, 255, 0.08),
+    inset 0 -1px 1px 0 var(--cp-glass-specular-bottom),
+    0 28px 72px -12px var(--cp-shadow-color-heavy);
+  border-radius: var(--cp-radius-xl);
+  position: relative;
+  overflow: hidden;
+  transition: all var(--cp-transition-base);
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--cp-glass-specular-crest), transparent);
+    pointer-events: none;
+    opacity: 0.85;
+  }
+}
+
+// ── Tier 2: Glass Strong (Navigation Docks & Focus Cards) ────
+.glass-strong {
+  background: radial-gradient(110% 110% at 50% 0%, rgba(16, 35, 68, 0.65) 0%, rgba(8, 19, 38, 0.78) 100%);
+  backdrop-filter: blur(36px) saturate(190%);
+  -webkit-backdrop-filter: blur(36px) saturate(190%);
+  border: 1px solid var(--cp-glass-border);
+  box-shadow: 
+    inset 0 1px 1px 0 var(--cp-glass-specular-top),
+    inset 0 0 8px 0 rgba(159, 201, 255, 0.05),
+    0 18px 46px -8px var(--cp-shadow-color-medium);
+  border-radius: var(--cp-radius-lg);
+  position: relative;
+  transition: all var(--cp-transition-base);
+}
+
+// ── Tier 3: Glass Medium (Default Panels, Forms & HUD) ──────
+.glass-medium, .glass-panel {
+  background: radial-gradient(100% 100% at 50% 0%, rgba(14, 30, 58, 0.52) 0%, rgba(8, 19, 38, 0.68) 100%);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--cp-glass-border);
+  box-shadow: 
+    inset 0 1px 0.75px 0 var(--cp-glass-specular-top),
+    0 10px 34px -6px var(--cp-shadow-color-soft);
+  border-radius: var(--cp-radius-lg);
+  transition: all var(--cp-transition-base);
+}
+
+// ── Tier 4: Glass Soft (Sub-panels, List Items & Chips) ─────
+.glass-soft, .glass-panel-subtle {
+  background: rgba(8, 19, 38, 0.42);
+  backdrop-filter: blur(18px) saturate(165%);
+  -webkit-backdrop-filter: blur(18px) saturate(165%);
+  border: 1px solid var(--cp-glass-border-subtle);
+  box-shadow: inset 0 0.5px 0 0 var(--cp-glass-specular-top);
+  border-radius: var(--cp-radius-md);
+  transition: all var(--cp-transition-fast);
+}
+
+// ── Tier 5: Glass Floating (Interactive Cards with 3D Depth) 
+.glass-floating, .glass-panel-interactive {
+  background: radial-gradient(110% 110% at 50% 0%, rgba(16, 35, 68, 0.56) 0%, rgba(8, 19, 38, 0.72) 100%);
+  backdrop-filter: blur(32px) saturate(185%);
+  -webkit-backdrop-filter: blur(32px) saturate(185%);
+  border: 1px solid var(--cp-glass-border);
+  box-shadow: 
+    inset 0 1px 1px 0 var(--cp-glass-specular-top),
+    0 14px 40px -8px var(--cp-shadow-color-medium);
+  border-radius: var(--cp-radius-lg);
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.3s ease,
+              background 0.3s ease;
+
+  &:hover {
+    transform: translateY(-4px) scale(1.008);
+    background: radial-gradient(110% 110% at 50% 0%, rgba(24, 50, 96, 0.72) 0%, rgba(10, 24, 48, 0.85) 100%);
+    border-color: var(--cp-glass-border-hover);
+    box-shadow: 
+      inset 0 1px 1.5px 0 var(--cp-glass-specular-crest),
+      0 24px 60px -10px var(--cp-shadow-color-heavy),
+      0 0 32px -6px var(--cp-accent-primary-glow);
+  }
+
+  &:active {
+    transform: translateY(-1px) scale(0.995);
+  }
+}
+
+// ── Floating Spatial Dock & Navigation Bar ──────────────────
+.glass-dock {
+  background: radial-gradient(100% 100% at 50% 0%, rgba(14, 30, 60, 0.75) 0%, rgba(6, 14, 28, 0.85) 100%);
+  backdrop-filter: blur(48px) saturate(215%);
+  -webkit-backdrop-filter: blur(48px) saturate(215%);
+  border: 1px solid var(--cp-glass-border);
+  box-shadow: 
+    inset 0 1px 1.2px 0 var(--cp-glass-specular-top),
+    0 24px 60px -12px rgba(2, 6, 14, 0.8),
+    0 0 35px var(--cp-ambient-glow);
+  border-radius: var(--cp-radius-pill);
+  padding: 0.5rem 1rem;
+  transition: all var(--cp-transition-base);
+}
+
+// ── Sheet Grabber Pill (iOS Sheet Handle) ───────────────────
+.sheet-grabber {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+  margin: 0 auto 1rem auto;
+}
+
+// ── Glass Form Controls ─────────────────────────────────────
+.glass-input {
+  background: var(--cp-input-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--cp-glass-border);
+  color: var(--cp-text-primary);
+  border-radius: var(--cp-radius-md);
+  padding: 0.75rem 1.15rem;
+  font-size: 0.95rem;
+  transition: all var(--cp-transition-fast);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+
+  &::placeholder {
+    color: var(--cp-text-tertiary);
+  }
+
+  &:focus {
+    outline: none;
+    background: var(--cp-glass-hover-bg);
+    border-color: var(--cp-accent-primary);
+    box-shadow: 
+      0 0 0 3px var(--cp-accent-primary-glow),
+      inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    color: var(--cp-text-primary);
+  }
+}
+
+// ── Glass Interactive Buttons ───────────────────────────────
+.glass-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  border-radius: var(--cp-radius-md);
+  padding: 0.7rem 1.4rem;
+  transition: all var(--cp-transition-fast);
+  border: 1px solid transparent;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+    transition: left 0.6s ease;
+  }
+
+  &:hover::after {
+    left: 100%;
+  }
+
+  &.glass-button-primary {
+    background: linear-gradient(135deg, var(--cp-accent-primary), var(--cp-accent-primary-dark));
+    color: #ffffff;
+    box-shadow: 
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.35),
+      0 4px 18px var(--cp-accent-primary-glow);
+    border-color: rgba(255, 255, 255, 0.15);
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+        0 8px 24px var(--cp-accent-primary-glow);
+      filter: brightness(1.06);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+
+  &.glass-button-secondary {
+    background: var(--cp-glass-soft-bg);
+    color: var(--cp-text-primary);
+    border: 1px solid var(--cp-glass-border);
+    backdrop-filter: blur(20px);
+    box-shadow: inset 0 1px 0 0 var(--cp-glass-specular-top);
+
+    &:hover {
+      background: var(--cp-glass-hover-bg);
+      border-color: var(--cp-glass-border-hover);
+      transform: translateY(-2px);
+    }
+  }
+
+  &.glass-button-danger {
+    background: linear-gradient(135deg, #FF453A, #D70015);
+    color: #ffffff;
+    box-shadow: 
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.3),
+      0 4px 18px rgba(255, 69, 58, 0.35);
+
+    &:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.08);
+      box-shadow: 0 8px 24px rgba(255, 69, 58, 0.45);
+    }
+  }
+
+  &.glass-button-success {
+    background: linear-gradient(135deg, #30D158, #248A3D);
+    color: #ffffff;
+    box-shadow: 
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.3),
+      0 4px 18px rgba(48, 209, 88, 0.35);
+
+    &:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.08);
+      box-shadow: 0 8px 24px rgba(48, 209, 88, 0.45);
+    }
+  }
+}
+
+// ── Glass Notification Capsule & Pill Badges ────────────────
+.glass-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--cp-radius-pill);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid transparent;
+  box-shadow: inset 0 1px 0 0 var(--cp-glass-specular-top);
+}
+
+.glass-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  border-radius: var(--cp-radius-pill);
+  background: var(--cp-glass-strong-bg);
+  backdrop-filter: blur(30px);
+  border: 1px solid var(--cp-glass-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+// ── Segmented Control (Apple Floating Pill Track) ───────────
+.glass-segmented {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(6, 14, 28, 0.65);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--cp-glass-border);
+  border-radius: var(--cp-radius-pill);
+  padding: 4px;
+  gap: 4px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+
+  .segmented-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.4rem 1.15rem;
+    border-radius: var(--cp-radius-pill);
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--cp-text-secondary);
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    transition: all var(--cp-transition-fast);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--cp-text-primary);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    &.active {
+      color: #ffffff;
+      background: radial-gradient(100% 100% at 50% 0%, rgba(82, 127, 199, 0.35) 0%, rgba(16, 33, 58, 0.55) 100%);
+      border: 1px solid var(--cp-accent-ice-glow);
+      box-shadow: 
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.35),
+        0 0 16px rgba(159, 201, 255, 0.25);
+      font-weight: 600;
+    }
+  }
+}
+
+// ── Circular Glass Icon Button (Cockpit Control Bar Style) ──
+.glass-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: radial-gradient(100% 100% at 50% 0%, rgba(20, 42, 80, 0.45) 0%, rgba(8, 19, 38, 0.7) 100%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--cp-glass-border);
+  color: var(--cp-text-primary);
+  box-shadow: inset 0 1px 1px 0 var(--cp-glass-specular-top);
+  cursor: pointer;
+  transition: all var(--cp-transition-fast);
+
+  &:hover {
+    background: radial-gradient(100% 100% at 50% 0%, rgba(35, 70, 130, 0.65) 0%, rgba(14, 30, 60, 0.85) 100%);
+    border-color: var(--cp-glass-border-hover);
+    transform: translateY(-2px);
+    box-shadow: 
+      inset 0 1px 1.5px 0 var(--cp-glass-specular-crest),
+      0 0 16px var(--cp-accent-primary-glow);
+    color: #ffffff;
+  }
+
+  &:active {
+    transform: translateY(0) scale(0.96);
+  }
+}
+
+// ── Glowing Status Orbs (Cockpit Glowing Dot) ───────────────
+.glass-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  position: relative;
+
+  &.dot-ice {
+    background-color: var(--cp-accent-ice);
+    box-shadow: 0 0 12px var(--cp-accent-ice), 0 0 4px #ffffff;
+  }
+
+  &.dot-primary {
+    background-color: var(--cp-accent-primary);
+    box-shadow: 0 0 12px var(--cp-accent-primary), 0 0 4px #ffffff;
+  }
+
+  &.dot-success {
+    background-color: var(--cp-accent-success);
+    box-shadow: 0 0 12px var(--cp-accent-success), 0 0 4px #ffffff;
+  }
+
+  &.dot-warning {
+    background-color: var(--cp-accent-warning);
+    box-shadow: 0 0 12px var(--cp-accent-warning), 0 0 4px #ffffff;
+  }
+
+  &.dot-danger {
+    background-color: var(--cp-accent-danger);
+    box-shadow: 0 0 12px var(--cp-accent-danger), 0 0 4px #ffffff;
+  }
+}
+
+// ── Numbered Feature Stack Tag (01, 02, 03 Card Stack) ─────
+.glass-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 9px;
+  border-radius: var(--cp-radius-sm);
+  font-size: 0.72rem;
+  font-family: var(--cp-font-mono);
+  font-weight: 700;
+  color: var(--cp-accent-ice);
+  background: rgba(82, 127, 199, 0.16);
+  border: 1px solid rgba(159, 201, 255, 0.25);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}

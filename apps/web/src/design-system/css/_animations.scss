@@ -1,0 +1,78 @@
+// ============================================================
+// CivicPulse Micro-Animations & Keyframes
+// ============================================================
+
+@keyframes cp-pulse-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 69, 58, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(255, 69, 58, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 69, 58, 0);
+  }
+}
+
+@keyframes cp-pulse-cyan {
+  0% {
+    box-shadow: 0 0 0 0 rgba(100, 210, 255, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(100, 210, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(100, 210, 255, 0);
+  }
+}
+
+@keyframes cp-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes cp-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes cp-radar-sweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-pulse-glow {
+  animation: cp-pulse-glow 2s infinite;
+}
+
+.animate-pulse-cyan {
+  animation: cp-pulse-cyan 2.5s infinite;
+}
+
+.animate-float {
+  animation: cp-float 4s ease-in-out infinite;
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--cp-glass-bg) 25%,
+    var(--cp-glass-bg-hover) 50%,
+    var(--cp-glass-bg) 75%
+  );
+  background-size: 200% 100%;
+  animation: cp-shimmer 1.8s infinite;
+  border-radius: var(--cp-radius-sm);
+}

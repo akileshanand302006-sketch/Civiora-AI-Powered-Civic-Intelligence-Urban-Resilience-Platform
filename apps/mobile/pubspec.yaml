@@ -1,0 +1,29 @@
+name: civicpulse_mobile
+description: "CivicPulse — AI-Powered Civic Intelligence & Field Response Mobile App"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.5.1
+  dio: ^5.4.3
+  flutter_secure_storage: ^9.0.0
+  google_fonts: ^6.2.1
+  geolocator: ^11.0.0
+  camera: ^0.10.5
+  socket_io_client: ^2.0.3+1
+  uuid: ^4.4.0
+  intl: ^0.19.0
+  flutter_svg: ^2.0.10
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

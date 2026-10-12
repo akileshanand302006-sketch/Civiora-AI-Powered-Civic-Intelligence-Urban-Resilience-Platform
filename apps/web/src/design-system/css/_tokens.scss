@@ -1,0 +1,73 @@
+// ============================================================
+// Civiora Design Tokens — Dark Navy Spatial Liquid Glass System
+// ============================================================
+// Calibrated to authoritative Dark Navy & Ice-Blue color reference
+// ============================================================
+
+// ── Breakpoints ─────────────────────────────────────────────
+$bp-sm: 576px;
+$bp-md: 768px;
+$bp-lg: 992px;
+$bp-xl: 1200px;
+$bp-xxl: 1400px;
+
+// ── Spacing Scale ──────────────────────────────────────────
+$space-1: 0.25rem;   // 4px
+$space-2: 0.5rem;    // 8px
+$space-3: 0.75rem;   // 12px
+$space-4: 1rem;      // 16px
+$space-5: 1.5rem;    // 24px
+$space-6: 2rem;      // 32px
+$space-7: 2.5rem;    // 40px
+$space-8: 3rem;      // 48px
+$space-9: 4rem;      // 64px
+$space-10: 5rem;     // 80px
+
+// ── Border Radii (Apple Continuous Curve Style) ────────────
+$radius-xs: 8px;
+$radius-sm: 12px;
+$radius-md: 18px;
+$radius-lg: 24px;
+$radius-xl: 32px;
+$radius-2xl: 42px;
+$radius-pill: 9999px;
+
+// ── Liquid Glass Properties & Blur Tiers ───────────────────
+$glass-blur-subtle: 14px;
+$glass-blur-soft: 20px;
+$glass-blur-medium: 32px;
+$glass-blur-strong: 44px;
+$glass-blur-ultra: 56px;
+$glass-saturate: 195%;
+
+// ── Spatial Depth & Elevation (Navy-tinted ambient shadows) ─
+$depth-1: 0 4px 20px rgba(2, 6, 14, 0.45);
+$depth-2: 0 10px 32px -4px rgba(2, 6, 14, 0.65);
+$depth-3: 0 18px 48px -6px rgba(2, 6, 14, 0.8);
+$depth-floating: 0 28px 72px -12px rgba(2, 6, 14, 0.9), 0 0 40px -8px rgba(82, 127, 199, 0.15);
+
+// ── Typography ────────────────────────────────────────────
+$font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+
+// ── Spring Motion & Timing Curves ──────────────────────────
+$ease-spring-snappy: cubic-bezier(0.19, 1, 0.22, 1);
+$ease-spring-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
+$ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+
+$transition-micro: 140ms $ease-spring-snappy;
+$transition-fast: 240ms $ease-smooth;
+$transition-base: 360ms $ease-smooth;
+$transition-spatial: 520ms $ease-spring-bouncy;
+
+// ── Z-Index Hierarchy ──────────────────────────────────────
+$z-ambient: -2;
+$z-3d-scene: 0;
+$z-background-grid: 1;
+$z-content: 10;
+$z-dock: 100;
+$z-header: 200;
+$z-modal-backdrop: 400;
+$z-modal: 500;
+$z-toast: 900;
+$z-cursor: 9999;

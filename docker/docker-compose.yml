@@ -1,0 +1,94 @@
+# ============================================================
+# CivicPulse — Local Development Docker Compose
+# ============================================================
+# Usage:
+#   docker compose -f docker/docker-compose.yml up -d
+#   docker compose -f docker/docker-compose.yml down
+# ============================================================
+
+services:
+  # ── MongoDB ──────────────────────────────────────────────
+  mongodb:
+    image: mongo:7
+    container_name: civicpulse-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: civicpulse_dev
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis ────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: civicpulse-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis Commander (Dev UI) ─────────────────────────────
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: civicpulse-redis-ui
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles:
+      - tools
+    restart: unless-stopped
+
+  # ── Mongo Express (Dev UI) ──────────────────────────────
+  mongo-express:
+    image: mongo-express:latest
+    container_name: civicpulse-mongo-ui
+    ports:
+      - "8082:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/civicpulse_dev
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    profiles:
+      - tools
+    restart: unless-stopped
+
+  # ── BullMQ Dashboard (Dev UI) ───────────────────────────
+  bull-board:
+    image: deadly0/bull-board
+    container_name: civicpulse-bull-board
+    ports:
+      - "8083:3000"
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles:
+      - tools
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
