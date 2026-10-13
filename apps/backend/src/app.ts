@@ -26,6 +26,7 @@ import notificationRoutes from './modules/notifications/notification.routes.js';
 import securityRoutes from './modules/security/security.routes.js';
 import aiRoutes from './modules/ai/ai.routes.js';
 import contactRoutes from './modules/contact/contact.routes.js';
+import { inngestHandler } from './inngest/index.js';
 
 const app = express();
 
@@ -103,6 +104,10 @@ app.use(`${apiPrefix}/ai`, aiRoutes);
 // Contact Center & Inquiries
 app.use(`${apiPrefix}/contact`, contactRoutes);
 app.use('/api/contact', contactRoutes);
+
+// Inngest Event-Driven Workflows (Single API route for Resend automation & SLA delays)
+app.use('/api/inngest', inngestHandler);
+app.use(`${apiPrefix}/inngest`, inngestHandler);
 
 // ── 404 Handler ───────────────────────────────────────────
 app.use((_req, res) => {

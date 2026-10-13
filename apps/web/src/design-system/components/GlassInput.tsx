@@ -5,11 +5,12 @@ export interface GlassInputProps extends React.InputHTMLAttributes<HTMLInputElem
   error?: string;
   helperText?: string;
   icon?: string;
+  rightElement?: React.ReactNode;
   containerClassName?: string;
 }
 
 export const GlassInput = React.forwardRef<HTMLInputElement, GlassInputProps>(
-  ({ label, error, helperText, icon, containerClassName = '', className = '', id, ...props }, ref) => {
+  ({ label, error, helperText, icon, rightElement, containerClassName = '', className = '', id, ...props }, ref) => {
     const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
 
     return (
@@ -40,11 +41,20 @@ export const GlassInput = React.forwardRef<HTMLInputElement, GlassInputProps>(
             className={`glass-input w-100 ${className}`}
             style={{
               paddingLeft: icon ? '2.5rem' : '1rem',
+              paddingRight: rightElement ? '2.75rem' : '1rem',
               borderColor: error ? 'var(--cp-accent-danger)' : undefined,
               ...props.style,
             }}
             {...props}
           />
+          {rightElement && (
+            <div
+              className="position-absolute d-flex align-items-center"
+              style={{ right: '0.75rem', zIndex: 5 }}
+            >
+              {rightElement}
+            </div>
+          )}
         </div>
         {error ? (
           <span style={{ fontSize: '0.75rem', color: 'var(--cp-accent-danger)' }}>{error}</span>

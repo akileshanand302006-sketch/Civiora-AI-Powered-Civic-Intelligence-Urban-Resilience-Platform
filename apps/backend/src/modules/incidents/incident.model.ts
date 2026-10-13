@@ -94,6 +94,8 @@ export interface IIncident extends Document {
     aiResolutionConfidence?: number;
     verifiedByHuman: boolean;
   };
+  resolutionDocumentId?: Types.ObjectId;
+  workSessionId?: Types.ObjectId;
   metadata: {
     source: 'web' | 'mobile' | 'api';
     deviceInfo?: Record<string, unknown>;
@@ -243,6 +245,8 @@ const incidentSchema = new Schema<IIncident>(
       aiResolutionConfidence: { type: Number },
       verifiedByHuman: { type: Boolean, default: true },
     },
+    resolutionDocumentId: { type: Schema.Types.ObjectId, ref: 'ResolutionDocument' },
+    workSessionId: { type: Schema.Types.ObjectId, ref: 'WorkSession' },
     metadata: {
       source: {
         type: String,
@@ -270,8 +274,9 @@ const incidentSchema = new Schema<IIncident>(
     timestamps: true,
     toJSON: {
       transform: (_doc, ret: Record<string, any>) => {
-        ret.id = (ret._id as { toString(): string }).toString();
-        delete ret._id;
+        const idStr = (ret._id as { toString(): string }).toString();
+        ret.id = idStr;
+        ret._id = idStr;
         delete ret.__v;
         return ret;
       },

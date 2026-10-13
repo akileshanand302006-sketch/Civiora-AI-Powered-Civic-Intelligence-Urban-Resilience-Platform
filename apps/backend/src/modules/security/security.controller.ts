@@ -9,8 +9,10 @@ import { SecurityEvent } from './securityEvent.model.js';
 export async function getAuditLogs(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const user = (req as any).user;
+    const orgId = user?.org || user?.organizationId || req.organizationId;
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
-    const filter: Record<string, any> = { organizationId: user.organizationId };
+    const filter: Record<string, any> = {};
+    if (orgId && user?.role !== 'system_admin') filter.organizationId = orgId;
 
     if (req.query.action) filter.action = req.query.action;
     if (req.query.resource) filter.resource = req.query.resource;
@@ -29,8 +31,9 @@ export async function getAuditLogs(req: Request, res: Response, next: NextFuncti
 export async function getSecurityEvents(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const user = (req as any).user;
+    const orgId = user?.org || user?.organizationId || req.organizationId;
     const filter: Record<string, any> = {};
-    if (user?.organizationId) filter.organizationId = user.organizationId;
+    if (orgId && user?.role !== 'system_admin') filter.organizationId = orgId;
 
     const events = await SecurityEvent.find(filter).sort({ timestamp: -1 }).limit(50);
     res.json({ success: true, data: events });
@@ -42,18 +45,20 @@ export async function getSecurityEvents(req: Request, res: Response, next: NextF
 export async function getSecuritySummary(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const user = (req as any).user;
-    const orgId = user.organizationId;
+    const orgId = user?.org || user?.organizationId || req.organizationId;
 
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const filter: Record<string, any> = {};
+    if (orgId && user?.role !== 'system_admin') filter.organizationId = orgId;
 
     const [totalEvents24h, criticalEvents24h, recentEvents] = await Promise.all([
-      SecurityEvent.countDocuments({ organizationId: orgId, timestamp: { $gte: oneDayAgo } }),
+      SecurityEvent.countDocuments({ ...filter, timestamp: { $gte: oneDayAgo } }),
       SecurityEvent.countDocuments({
-        organizationId: orgId,
+        ...filter,
         severity: 'critical',
         timestamp: { $gte: oneDayAgo },
       }),
-      SecurityEvent.find({ organizationId: orgId }).sort({ timestamp: -1 }).limit(10),
+      SecurityEvent.find(filter).sort({ timestamp: -1 }).limit(10),
     ]);
 
     res.json({

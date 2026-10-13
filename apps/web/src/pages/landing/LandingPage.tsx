@@ -3,10 +3,11 @@
 // 3D Digital City + Urban Risk Globe + AI Neural Pipeline
 // ============================================================
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CityScene } from '../../three/CityScene';
-import { UrbanRiskGlobe } from '../../three/UrbanRiskGlobe';
+import { DEMO_GLOBE_ZONES } from '../../three/UrbanRiskGlobe';
+import { api } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useLocationStore } from '../../stores/locationStore';
 import {
@@ -26,6 +27,11 @@ export const LandingPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'citizen' | 'worker' | 'officer' | 'admin'>('citizen');
   const [inspectedBeacon, setInspectedBeacon] = useState<string | null>(null);
+  const [selectedZoneCategory, setSelectedZoneCategory] = useState<'all' | 'critical' | 'flood' | 'structural' | 'predictive'>('all');
+  const [selectedZoneId, setSelectedZoneId] = useState<string>('zone-tiruppur');
+
+  const [liveIncidents, setLiveIncidents] = useState<any[]>([]);
+  const [liveMetrics, setLiveMetrics] = useState<any>(null);
 
   const metric1Ref = useRef<HTMLDivElement>(null);
   const metric2Ref = useRef<HTMLDivElement>(null);
@@ -33,12 +39,120 @@ export const LandingPage: React.FC = () => {
   const metric4Ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Animate metric numbers on landing page mount
-    if (metric1Ref.current) animateMetric(metric1Ref.current, 0, 142, '', 1600);
-    if (metric2Ref.current) animateMetric(metric2Ref.current, 0, 28, 'm', 1400);
-    if (metric3Ref.current) animateMetric(metric3Ref.current, 0, 98.4, '%', 1800);
-    if (metric4Ref.current) animateMetric(metric4Ref.current, 0, 96.2, '%', 1800);
+    async function loadLiveTelemetry() {
+      try {
+        const [incRes, metRes] = await Promise.all([
+          api.get('/incidents?limit=50').catch(() => ({ data: { data: [] } })),
+          api.get('/incidents/metrics').catch(() => ({ data: { data: null } })),
+        ]);
+        if (incRes.data?.data && Array.isArray(incRes.data.data)) {
+          setLiveIncidents(incRes.data.data);
+        }
+        if (metRes.data?.data) {
+          setLiveMetrics(metRes.data.data);
+        }
+      } catch (err) {
+        console.warn('Live telemetry fetch fallback', err);
+      }
+    }
+    loadLiveTelemetry();
   }, []);
+
+  const computedZones = useMemo(() => {
+    if (!liveIncidents || liveIncidents.length === 0) {
+      return DEMO_GLOBE_ZONES;
+    }
+
+    const tiruppurIncidents = liveIncidents.filter((i) =>
+      ((i.location?.address || '') + ' ' + (i.title || '')).toLowerCase().includes('tiruppur')
+    );
+    const coimbatoreIncidents = liveIncidents.filter((i) =>
+      ((i.location?.address || '') + ' ' + (i.title || '')).toLowerCase().includes('coimbatore') ||
+      ((i.location?.address || '') + ' ' + (i.title || '')).toLowerCase().includes('ukkadam')
+    );
+    const roadIncidents = liveIncidents.filter((i) =>
+      i.category === 'pothole' || i.category === 'road_damage' || i.category === 'garbage_accumulation'
+    );
+    const drainageIncidents = liveIncidents.filter((i) =>
+      i.category === 'drainage_blockage' || i.category === 'flooding' || i.category === 'water_logging'
+    );
+    const powerIncidents = liveIncidents.filter((i) =>
+      i.category === 'transformer_spark' || i.category === 'street_light_outage' || i.isEmergency
+    );
+
+    return [
+      {
+        id: 'zone-tiruppur',
+        name: 'Tiruppur Municipal Grid',
+        lat: 11.1085,
+        lng: 77.3411,
+        riskScore: tiruppurIncidents.length > 0 ? 84 : 76,
+        activeIncidents: tiruppurIncidents.length || 14,
+        category: 'critical' as const,
+        predictionSnippet: tiruppurIncidents[0]
+          ? `${tiruppurIncidents[0].title} — ${tiruppurIncidents[0].location?.address || 'Pitchampalayam North'}`
+          : 'High volume textile effluent & road infrastructure telemetry alert.',
+      },
+      {
+        id: 'zone-coimbatore',
+        name: 'Coimbatore South & Central',
+        lat: 11.0168,
+        lng: 76.9558,
+        riskScore: coimbatoreIncidents.length > 0 ? 92 : 88,
+        activeIncidents: coimbatoreIncidents.length || 28,
+        category: 'flood' as const,
+        predictionSnippet: coimbatoreIncidents[0]
+          ? `${coimbatoreIncidents[0].title} — ${coimbatoreIncidents[0].location?.address || 'South Ukkadam Ward 84'}`
+          : 'Monsoon drainage breach in low-lying residential sectors.',
+      },
+      {
+        id: 'zone-arterial-roads',
+        name: 'Urban Roadways & Arterials',
+        lat: 11.0289,
+        lng: 77.0279,
+        riskScore: roadIncidents.length > 0 ? 74 : 68,
+        activeIncidents: roadIncidents.length || liveIncidents.length,
+        category: 'structural' as const,
+        predictionSnippet: roadIncidents[0]
+          ? `${roadIncidents[0].title} — Pothole & road deformation telemetry.`
+          : 'Moderate pavement subsidence detected via mobile dashcam vision nodes.',
+      },
+      {
+        id: 'zone-drainage',
+        name: 'Stormwater Aqueduct Network',
+        lat: 11.0422,
+        lng: 77.0644,
+        riskScore: drainageIncidents.length > 0 ? 88 : 78,
+        activeIncidents: drainageIncidents.length || 19,
+        category: 'predictive' as const,
+        predictionSnippet: drainageIncidents[0]
+          ? `${drainageIncidents[0].title} — AI forecasting 82% flood probability.`
+          : 'AI forecasting 73% probability of drainage blockage in low-lying wards.',
+      },
+      {
+        id: 'zone-power-grid',
+        name: 'Municipal Electrical Distribution',
+        lat: 11.0033,
+        lng: 76.9634,
+        riskScore: powerIncidents.length > 0 ? 82 : 45,
+        activeIncidents: powerIncidents.length || 7,
+        category: 'critical' as const,
+        predictionSnippet: powerIncidents[0]
+          ? `${powerIncidents[0].title} — TNEB Quick Response Crew alerted.`
+          : 'Standard transformer thermal load within normal operating SLA bounds.',
+      },
+    ];
+  }, [liveIncidents]);
+
+  useEffect(() => {
+    // Animate metric numbers on landing page mount
+    const totalCount = liveMetrics?.total || (liveIncidents.length > 0 ? liveIncidents.length : 142);
+    const slaAdherence = liveMetrics?.slaAdherence || 98.4;
+    if (metric1Ref.current) animateMetric(metric1Ref.current, 0, totalCount, '', 1600);
+    if (metric2Ref.current) animateMetric(metric2Ref.current, 0, 28, 'm', 1400);
+    if (metric3Ref.current) animateMetric(metric3Ref.current, 0, slaAdherence, '%', 1800);
+    if (metric4Ref.current) animateMetric(metric4Ref.current, 0, 96.2, '%', 1800);
+  }, [liveIncidents, liveMetrics]);
 
   const handleSelectLocation = () => {
     if (!isAuthenticated) {
@@ -295,8 +409,182 @@ export const LandingPage: React.FC = () => {
         </div>
 
         <div className="row g-4 align-items-center">
-          <div className="col-12 col-lg-8" style={{ height: 'clamp(320px, 45vh, 540px)' }}>
-            <UrbanRiskGlobe />
+          <div className="col-12 col-lg-8">
+            <GlassSurface
+              tier="ultra"
+              depth="3d"
+              glow
+              className="p-4"
+              style={{
+                borderRadius: '24px',
+                border: '1px solid rgba(100, 210, 255, 0.25)',
+                background: 'rgba(8, 14, 28, 0.82)',
+                backdropFilter: 'blur(30px)',
+              }}
+            >
+              {/* Terminal Header */}
+              <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 pb-3 border-bottom border-white-subtle">
+                <div className="d-flex align-items-center gap-2">
+                  <span
+                    style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      background: '#00E5FF',
+                      boxShadow: '0 0 10px #00E5FF',
+                    }}
+                    className="animate-pulse-glow"
+                  />
+                  <span className="small font-monospace fw-bold" style={{ color: '#00E5FF', letterSpacing: '0.08em' }}>
+                    SPATIAL MUNICIPAL TELEMETRY
+                  </span>
+                </div>
+
+                {/* Filter Pills */}
+                <div className="d-flex flex-wrap gap-1">
+                  {(['all', 'critical', 'flood', 'structural', 'predictive'] as const).map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setSelectedZoneCategory(cat)}
+                      className="btn btn-sm px-2 py-1 text-uppercase fw-semibold"
+                      style={{
+                        fontSize: '0.7rem',
+                        borderRadius: '20px',
+                        background:
+                          selectedZoneCategory === cat
+                            ? 'rgba(10, 132, 255, 0.35)'
+                            : 'rgba(255, 255, 255, 0.05)',
+                        color: selectedZoneCategory === cat ? '#9FC9FF' : '#94A3B8',
+                        border:
+                          selectedZoneCategory === cat
+                            ? '1px solid rgba(100, 210, 255, 0.5)'
+                            : '1px solid rgba(255, 255, 255, 0.08)',
+                      }}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Zone List & Active Zone Inspector */}
+              <div className="row g-3">
+                <div className="col-12 col-md-6 d-flex flex-column gap-2" style={{ maxHeight: '340px', overflowY: 'auto' }}>
+                  {computedZones
+                    .filter((z) => selectedZoneCategory === 'all' || z.category === selectedZoneCategory)
+                    .map((zone) => {
+                      const isSelected = selectedZoneId === zone.id;
+                      return (
+                        <div
+                          key={zone.id}
+                          onClick={() => setSelectedZoneId(zone.id)}
+                          style={{
+                            cursor: 'pointer',
+                            borderRadius: '14px',
+                            padding: '12px 14px',
+                            background: isSelected
+                              ? 'rgba(10, 132, 255, 0.22)'
+                              : 'rgba(255, 255, 255, 0.03)',
+                            border: isSelected
+                              ? '1px solid rgba(100, 210, 255, 0.5)'
+                              : '1px solid rgba(255, 255, 255, 0.06)',
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          <div className="d-flex justify-content-between align-items-center mb-1">
+                            <span className="fw-bold small text-light">{zone.name}</span>
+                            <span
+                              className="badge"
+                              style={{
+                                background:
+                                  zone.riskScore >= 85
+                                    ? 'rgba(255, 69, 58, 0.25)'
+                                    : zone.riskScore >= 65
+                                    ? 'rgba(255, 159, 10, 0.25)'
+                                    : 'rgba(48, 209, 88, 0.25)',
+                                color:
+                                  zone.riskScore >= 85
+                                    ? '#FF453A'
+                                    : zone.riskScore >= 65
+                                    ? '#FF9F0A'
+                                    : '#30D158',
+                                fontSize: '0.72rem',
+                              }}
+                            >
+                              RISK {zone.riskScore}/100
+                            </span>
+                          </div>
+                          <div className="d-flex justify-content-between align-items-center text-secondary" style={{ fontSize: '0.75rem' }}>
+                            <span>{zone.activeIncidents} Active Incidents</span>
+                            <span className="text-uppercase font-monospace">{zone.category}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+
+                {/* Selected Zone Deep Dive Panel */}
+                <div className="col-12 col-md-6">
+                  {(() => {
+                    const currentZone =
+                      computedZones.find((z) => z.id === selectedZoneId) || computedZones[0]!;
+                    if (!currentZone) return null;
+                    return (
+                      <div
+                        className="p-3 h-100 rounded-3 d-flex flex-column justify-content-between"
+                        style={{
+                          background: 'rgba(15, 23, 42, 0.75)',
+                          border: '1px solid rgba(100, 210, 255, 0.3)',
+                        }}
+                      >
+                        <div>
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <span className="small text-secondary font-monospace">ZONE TELEMETRY</span>
+                            <span className="small text-info font-monospace">
+                              LAT {currentZone.lat.toFixed(4)}° • LNG {currentZone.lng.toFixed(4)}°
+                            </span>
+                          </div>
+                          <h5 className="fw-bold text-light mb-2">{currentZone.name}</h5>
+                          <p className="small text-secondary mb-3" style={{ lineHeight: 1.5 }}>
+                            {currentZone.predictionSnippet}
+                          </p>
+
+                          <div className="mb-3">
+                            <div className="d-flex justify-content-between small mb-1">
+                              <span className="text-secondary">Vulnerability Index</span>
+                              <span className="fw-bold font-monospace" style={{ color: currentZone.riskScore >= 80 ? '#FF453A' : '#64D2FF' }}>
+                                {currentZone.riskScore}%
+                              </span>
+                            </div>
+                            <div className="progress" style={{ height: '6px', background: 'rgba(255,255,255,0.1)' }}>
+                              <div
+                                className="progress-bar"
+                                style={{
+                                  width: `${currentZone.riskScore}%`,
+                                  background:
+                                    currentZone.riskScore >= 80
+                                      ? 'linear-gradient(90deg, #FF9F0A, #FF453A)'
+                                      : 'linear-gradient(90deg, #0A84FF, #64D2FF)',
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="d-flex gap-2 mt-2">
+                          <Link to="/live-map" className="btn btn-sm btn-primary w-100 fw-semibold">
+                            <i className="bi bi-compass me-1" /> Inspect in 3D Map
+                          </Link>
+                          <Link to="/dashboard" className="btn btn-sm btn-outline-light w-100 fw-semibold">
+                            <i className="bi bi-shield me-1" /> View Incidents
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </GlassSurface>
           </div>
 
           <div className="col-12 col-lg-4 d-flex flex-column gap-3">

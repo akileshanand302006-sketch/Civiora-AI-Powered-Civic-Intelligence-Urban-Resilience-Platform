@@ -46,7 +46,7 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM_EMAIL
-        value: reports@civiora.gov
+        value: onboarding@resend.dev
       - key: MUNICIPAL_RECEIVER_EMAIL
         value: akileshanand302006@gmail.com
       - key: EMAIL_DELIVERY_ENABLED

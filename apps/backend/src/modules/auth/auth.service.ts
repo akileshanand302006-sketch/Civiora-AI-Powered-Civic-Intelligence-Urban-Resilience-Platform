@@ -11,6 +11,7 @@ import { cache } from '../../config/redis.js';
 import { User, type IUser } from '../users/user.model.js';
 import { Organization } from '../organizations/org.model.js';
 import { Session, type ISession } from './session.model.js';
+import { Invitation } from './invitation.model.js';
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -144,13 +145,30 @@ export async function register(input: RegisterInput): Promise<IUser> {
   const verificationToken = generateRandomToken();
   const verificationTokenHash = hashToken(verificationToken);
 
-  // 5. Create user (citizen role only for self-registration)
-  const role: Role = 'citizen';
-  const permissions = ROLE_PERMISSIONS[role];
+  // 5. Determine role & department: claim invitation if present, otherwise default to citizen
+  const normalizedEmail = input.email.toLowerCase().trim();
+  const invitation = await Invitation.findOne({
+    email: normalizedEmail,
+    status: 'pending',
+    expiresAt: { $gt: new Date() },
+  });
+
+  let role: Role = 'citizen';
+  let departmentId: any = undefined;
+  if (invitation) {
+    role = invitation.role as Role;
+    departmentId = invitation.departmentId;
+    invitation.status = 'accepted';
+    invitation.acceptedAt = new Date();
+    await invitation.save();
+    logger.info({ email: normalizedEmail, role, dept: departmentId }, 'User claimed administrative invitation upon registration');
+  }
+
+  const permissions = ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS['citizen'];
 
   const user = await User.create({
     organizationId: org._id,
-    email: input.email.toLowerCase(),
+    email: normalizedEmail,
     passwordHash,
     profile: {
       firstName: input.firstName,
@@ -159,6 +177,7 @@ export async function register(input: RegisterInput): Promise<IUser> {
     },
     role,
     permissions,
+    departmentId,
     trust: {
       score: 50,
       verifiedReports: 0,

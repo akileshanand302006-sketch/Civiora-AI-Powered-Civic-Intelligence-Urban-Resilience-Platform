@@ -13,6 +13,7 @@ import { GlassSurface, GlassButton, GlassInput } from '../../design-system/compo
 interface RoleOption {
   role: RoleTheme;
   title: string;
+  defaultName: string;
   email: string;
   icon: string;
   color: string;
@@ -23,6 +24,7 @@ const ROLES: RoleOption[] = [
   {
     role: 'citizen',
     title: 'Citizen',
+    defaultName: 'Priya Sharma',
     email: 'citizen@civicpulse.demo',
     icon: 'person-heart',
     color: '#0A84FF',
@@ -31,6 +33,7 @@ const ROLES: RoleOption[] = [
   {
     role: 'field_worker',
     title: 'Field Worker',
+    defaultName: 'Rajesh Kumar',
     email: 'worker@civicpulse.demo',
     icon: 'tools',
     color: '#FF9F0A',
@@ -39,6 +42,7 @@ const ROLES: RoleOption[] = [
   {
     role: 'department_officer',
     title: 'Department Officer',
+    defaultName: 'Anita Patel',
     email: 'officer@civicpulse.demo',
     icon: 'person-badge',
     color: '#64D2FF',
@@ -47,6 +51,7 @@ const ROLES: RoleOption[] = [
   {
     role: 'department_manager',
     title: 'Department Manager',
+    defaultName: 'Vikram Singh',
     email: 'manager@civicpulse.demo',
     icon: 'speedometer2',
     color: '#30D158',
@@ -55,6 +60,7 @@ const ROLES: RoleOption[] = [
   {
     role: 'emergency_operator',
     title: 'Emergency Operator',
+    defaultName: 'Meera Nair',
     email: 'emergency@civicpulse.demo',
     icon: 'exclamation-octagon-fill',
     color: '#FF453A',
@@ -63,6 +69,7 @@ const ROLES: RoleOption[] = [
   {
     role: 'moderator',
     title: 'Moderator',
+    defaultName: 'Arjun Reddy',
     email: 'moderator@civicpulse.demo',
     icon: 'shield-check',
     color: '#32ADE6',
@@ -71,6 +78,7 @@ const ROLES: RoleOption[] = [
   {
     role: 'tenant_admin',
     title: 'Tenant Admin',
+    defaultName: 'Deepa Iyer',
     email: 'tenant.admin@civicpulse.demo',
     icon: 'building-gear',
     color: '#5E5CE6',
@@ -79,6 +87,7 @@ const ROLES: RoleOption[] = [
   {
     role: 'system_admin',
     title: 'System Admin',
+    defaultName: 'Suresh Menon',
     email: 'admin@civicpulse.demo',
     icon: 'cpu-fill',
     color: '#BF5AF2',
@@ -87,6 +96,7 @@ const ROLES: RoleOption[] = [
   {
     role: 'security_auditor',
     title: 'Security Auditor',
+    defaultName: 'Kavitha Rao',
     email: 'auditor@civicpulse.demo',
     icon: 'fingerprint',
     color: '#FF375F',
@@ -100,8 +110,10 @@ export const LoginPage: React.FC = () => {
   const { login } = useAuthStore();
 
   const [selectedRole, setSelectedRole] = useState<RoleTheme>('citizen');
+  const [fullName, setFullName] = useState('Priya Sharma');
   const [email, setEmail] = useState('citizen@civicpulse.demo');
   const [password, setPassword] = useState('CivicPulse@2026');
+  const [showPassword, setShowPassword] = useState(false);
   const [orgSlug, setOrgSlug] = useState('metropolis');
 
   const [error, setError] = useState<string | null>(null);
@@ -115,12 +127,14 @@ export const LoginPage: React.FC = () => {
       const matched = ROLES.find((r) => r.email === emailParam);
       if (matched) {
         setSelectedRole(matched.role);
+        setFullName(matched.defaultName);
       }
     }
   }, [searchParams]);
 
   const handleRoleSelect = (r: RoleOption) => {
     setSelectedRole(r.role);
+    setFullName(r.defaultName);
     setEmail(r.email);
     setPassword('CivicPulse@2026');
     setOrgSlug('metropolis');
@@ -151,7 +165,11 @@ export const LoginPage: React.FC = () => {
       setTimeout(() => {
         const accessToken = data.tokens?.accessToken || data.accessToken;
         const refreshToken = data.tokens?.refreshToken || data.refreshToken;
-        login(data.user, accessToken, refreshToken);
+        const userPayload = {
+          ...data.user,
+          fullName: data.user?.fullName || fullName,
+        };
+        login(userPayload, accessToken, refreshToken);
         const redirectUrl = searchParams.get('redirect');
         const hasLocation = Boolean(localStorage.getItem('cp_selected_location'));
 
@@ -399,6 +417,16 @@ export const LoginPage: React.FC = () => {
 
                 <form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
                   <GlassInput
+                    label="Full Name (Account Identity / Display Preference)"
+                    type="text"
+                    required={false}
+                    icon="person"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    helperText="Canonical account name retrieved from database upon verification"
+                  />
+
+                  <GlassInput
                     label="Credential Identity"
                     type="email"
                     required
@@ -409,11 +437,22 @@ export const LoginPage: React.FC = () => {
 
                   <GlassInput
                     label="Security Token / Password"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     required
                     icon="key"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    rightElement={
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-link p-0 text-secondary"
+                        onClick={() => setShowPassword(!showPassword)}
+                        style={{ textDecoration: 'none' }}
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        <i className={`bi bi-${showPassword ? 'eye-slash' : 'eye'}`} />
+                      </button>
+                    }
                   />
 
                   <GlassInput

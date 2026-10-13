@@ -21,6 +21,12 @@ const { result } = concurrently(
       prefixColor: 'magenta',
       env: { CIVIORA_ROOT_ORCHESTRATED: '1' },
     },
+    {
+      command: 'node scripts/portBridge.js',
+      name: 'bridge',
+      prefixColor: 'yellow',
+      env: { CIVIORA_ROOT_ORCHESTRATED: '1' },
+    },
   ],
   {
     prefix: '[{name}]',

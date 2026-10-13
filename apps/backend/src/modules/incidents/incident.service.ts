@@ -7,6 +7,8 @@
 
 import { Types } from 'mongoose';
 import { Incident, type IIncident } from './incident.model.js';
+import { User } from '../users/user.model.js';
+import { Notification } from '../notifications/notification.model.js';
 import {
   INCIDENT_STATUSES,
   INCIDENT_STATUS_TRANSITIONS,
@@ -22,6 +24,7 @@ import {
   BadRequestError,
   ForbiddenError,
 } from '../../utils/errors.js';
+import { emitInngestEvent } from '../../inngest/index.js';
 import {
   emitToOrg,
   emitToIncident,
@@ -78,6 +81,9 @@ export interface IncidentFilterOptions {
   priority?: IncidentPriority;
   departmentId?: string;
   isEmergency?: boolean;
+  emergencyOnly?: boolean;
+  myReports?: boolean;
+  assignedToMe?: boolean;
   assignedTo?: string;
   reportedBy?: string;
   search?: string;
@@ -292,13 +298,57 @@ export async function createIncident(
     emitEmergency(organizationId, SOCKET_EVENTS.EMERGENCY_ALERT, payload);
   }
 
+  // Notify municipal admins, officers, and field workers
+  try {
+    const staffQuery: any = {
+      role: { $in: ['officer', 'manager', 'tenant_admin', 'field_worker', 'system_admin'] },
+      isActive: true,
+    };
+    if (organizationId && Types.ObjectId.isValid(organizationId)) {
+      staffQuery.organizationId = new Types.ObjectId(organizationId);
+    }
+    const municipalStaff = await User.find(staffQuery).select('_id role email');
+
+    if (municipalStaff.length > 0) {
+      const notifs = municipalStaff.map((staff) => ({
+        userId: staff._id,
+        organizationId: incident.organizationId,
+        type: isEmergency ? 'EMERGENCY_INCIDENT' : 'INCIDENT_CREATED',
+        title: isEmergency ? '🚨 Critical Emergency Incident' : 'New Civic Hazard Reported',
+        message: `${incident.incidentNumber}: ${incident.title} (${incident.location?.address || 'Municipal Sector'})`,
+        data: {
+          incidentId: incident._id,
+          incidentNumber: incident.incidentNumber,
+          category: incident.category,
+          priority: incident.priority,
+          isEmergency,
+        },
+        channels: ['in_app', 'email'],
+        isRead: false,
+      }));
+      await Notification.insertMany(notifs);
+
+      // Real-time socket notification to individual staff
+      for (const staff of municipalStaff) {
+        emitToUser(staff._id.toString(), SOCKET_EVENTS.NOTIFICATION_NEW, {
+          title: isEmergency ? '🚨 Critical Emergency Incident' : 'New Civic Hazard Reported',
+          message: `${incident.incidentNumber}: ${incident.title}`,
+          incidentId: incident._id.toString(),
+          incidentNumber: incident.incidentNumber,
+        });
+      }
+    }
+  } catch (notifErr) {
+    logger.warn({ err: notifErr }, 'Could not broadcast municipal staff notifications');
+  }
+
   return incident;
 }
 
 // ── Query Incidents ──────────────────────────────────────────
 
 export async function getIncidents(
-  organizationId: string,
+  organizationId: string | undefined,
   filters: IncidentFilterOptions,
 ): Promise<{
   incidents: IIncident[];
@@ -311,17 +361,30 @@ export async function getIncidents(
   const limit = Math.min(100, Math.max(1, filters.limit || 20));
   const skip = (page - 1) * limit;
 
-  const query: Record<string, any> = {
-    organizationId: new Types.ObjectId(organizationId),
-  };
+  const query: Record<string, any> = {};
+
+  if (organizationId && Types.ObjectId.isValid(organizationId)) {
+    query.organizationId = new Types.ObjectId(organizationId);
+  }
 
   if (filters.category) query.category = filters.category;
   if (filters.status) query.status = filters.status;
   if (filters.priority) query.priority = filters.priority;
-  if (filters.departmentId) query.departmentId = new Types.ObjectId(filters.departmentId);
-  if (filters.assignedTo) query.assignedTo = new Types.ObjectId(filters.assignedTo);
-  if (filters.reportedBy) query.reportedBy = new Types.ObjectId(filters.reportedBy);
-  if (typeof filters.isEmergency === 'boolean') query.isEmergency = filters.isEmergency;
+  if (filters.departmentId && Types.ObjectId.isValid(filters.departmentId)) {
+    query.departmentId = new Types.ObjectId(filters.departmentId);
+  }
+  if (filters.assignedTo && Types.ObjectId.isValid(filters.assignedTo)) {
+    query.assignedTo = new Types.ObjectId(filters.assignedTo);
+  }
+  if (filters.reportedBy && Types.ObjectId.isValid(filters.reportedBy)) {
+    query.reportedBy = new Types.ObjectId(filters.reportedBy);
+  }
+  if (typeof filters.isEmergency === 'boolean') {
+    query.isEmergency = filters.isEmergency;
+  }
+  if (filters.emergencyOnly) {
+    query.$or = [{ isEmergency: true }, { priority: 'critical' }, { 'risk.level': 'critical' }];
+  }
 
   if (filters.search) {
     query.$or = [
@@ -359,7 +422,6 @@ export async function getIncidents(
     }
   }
 
-
   const sortOrder = filters.sortOrder === 'asc' ? 1 : -1;
   const sortField = filters.sortBy || 'createdAt';
   const sort: Record<string, any> = { [sortField]: sortOrder };
@@ -385,11 +447,12 @@ export async function getIncidents(
 
 // ── Get Incident Detail ──────────────────────────────────────
 
-export async function getIncidentById(id: string, organizationId: string): Promise<IIncident> {
-  const incident = await Incident.findOne({
-    _id: id,
-    organizationId: new Types.ObjectId(organizationId),
-  })
+export async function getIncidentById(id: string, _organizationId?: string): Promise<IIncident> {
+  const query: Record<string, any> = Types.ObjectId.isValid(id)
+    ? { _id: new Types.ObjectId(id) }
+    : { incidentNumber: id };
+
+  const incident = await Incident.findOne(query)
     .populate('reportedBy', 'profile email role trust')
     .populate('assignedTo', 'profile email role')
     .populate('timeline.performedBy', 'profile role');
@@ -404,13 +467,12 @@ export async function getIncidentById(id: string, organizationId: string): Promi
 // ── Geospatial Query: Nearby Incidents ───────────────────────
 
 export async function getNearbyIncidents(
-  organizationId: string,
+  organizationId: string | undefined,
   lng: number,
   lat: number,
   radiusMeters: number = 5000,
 ): Promise<IIncident[]> {
-  return Incident.find({
-    organizationId: new Types.ObjectId(organizationId),
+  const query: Record<string, any> = {
     status: { $nin: [INCIDENT_STATUSES.RESOLVED, INCIDENT_STATUSES.CLOSED, INCIDENT_STATUSES.REJECTED] },
     'location.coordinates': {
       $near: {
@@ -421,7 +483,12 @@ export async function getNearbyIncidents(
         $maxDistance: radiusMeters,
       },
     },
-  })
+  };
+  if (organizationId && Types.ObjectId.isValid(organizationId)) {
+    query.organizationId = new Types.ObjectId(organizationId);
+  }
+
+  return Incident.find(query)
     .select('incidentNumber category title status priority isEmergency location risk createdAt')
     .limit(50);
 }
@@ -430,15 +497,12 @@ export async function getNearbyIncidents(
 
 export async function updateIncidentStatus(
   id: string,
-  organizationId: string,
+  _organizationId: string,
   userId: string,
   newStatus: IncidentStatus,
   notes?: string,
 ): Promise<IIncident> {
-  const incident = await Incident.findOne({
-    _id: id,
-    organizationId: new Types.ObjectId(organizationId),
-  });
+  const incident = await Incident.findById(id);
 
   if (!incident) {
     throw new NotFoundError('Incident');
@@ -471,7 +535,9 @@ export async function updateIncidentStatus(
     status: newStatus,
     updatedAt: incident.updatedAt,
   });
-  emitToOrg(organizationId, SOCKET_EVENTS.INCIDENT_UPDATED, payload);
+  if (incident.organizationId) {
+    emitToOrg(incident.organizationId.toString(), SOCKET_EVENTS.INCIDENT_UPDATED, payload);
+  }
 
   return incident;
 }
@@ -480,22 +546,19 @@ export async function updateIncidentStatus(
 
 export async function assignIncident(
   id: string,
-  organizationId: string,
+  _organizationId: string,
   assignedByUserId: string,
   assigneeUserId: string,
   departmentId?: string,
 ): Promise<IIncident> {
-  const incident = await Incident.findOne({
-    _id: id,
-    organizationId: new Types.ObjectId(organizationId),
-  });
+  const incident = await Incident.findById(id);
 
   if (!incident) {
     throw new NotFoundError('Incident');
   }
 
   incident.assignedTo = new Types.ObjectId(assigneeUserId);
-  if (departmentId) {
+  if (departmentId && Types.ObjectId.isValid(departmentId)) {
     incident.departmentId = new Types.ObjectId(departmentId);
   }
 
@@ -522,7 +585,19 @@ export async function assignIncident(
   const payload = incident.toJSON();
   emitToUser(assigneeUserId, SOCKET_EVENTS.INCIDENT_ASSIGNED, payload);
   emitToIncident(id, SOCKET_EVENTS.INCIDENT_UPDATED, payload);
-  emitToOrg(organizationId, SOCKET_EVENTS.INCIDENT_UPDATED, payload);
+  if (incident.organizationId) {
+    emitToOrg(incident.organizationId.toString(), SOCKET_EVENTS.INCIDENT_UPDATED, payload);
+  }
+
+  // Trigger Inngest automated SLA delays workflow
+  emitInngestEvent('incident/assigned', {
+    incidentId: incident._id.toString(),
+    incidentNumber: incident.incidentNumber,
+    priority: incident.priority,
+    assignedTo: assigneeUserId,
+    slaHours: incident.priority === 'critical' ? 2 : incident.priority === 'high' ? 12 : 24,
+    assignedAt: new Date().toISOString(),
+  });
 
   return incident;
 }
@@ -531,15 +606,12 @@ export async function assignIncident(
 
 export async function resolveIncident(
   id: string,
-  organizationId: string,
+  _organizationId: string,
   resolvedByUserId: string,
   notes: string,
   evidenceIds?: string[],
 ): Promise<IIncident> {
-  const incident = await Incident.findOne({
-    _id: id,
-    organizationId: new Types.ObjectId(organizationId),
-  });
+  const incident = await Incident.findById(id);
 
   if (!incident) {
     throw new NotFoundError('Incident');
@@ -570,7 +642,7 @@ export async function resolveIncident(
 
   const payload = incident.toJSON();
   emitToIncident(id, SOCKET_EVENTS.INCIDENT_RESOLVED, payload);
-  emitToOrg(organizationId, SOCKET_EVENTS.INCIDENT_RESOLVED, payload);
+  emitToOrg(incident.organizationId?.toString() || _organizationId, SOCKET_EVENTS.INCIDENT_RESOLVED, payload);
   emitToUser(incident.reportedBy.toString(), SOCKET_EVENTS.NOTIFICATION_NEW, {
     title: 'Incident Resolved',
     message: `Your report #${incident.incidentNumber} (${incident.title}) has been marked as resolved!`,

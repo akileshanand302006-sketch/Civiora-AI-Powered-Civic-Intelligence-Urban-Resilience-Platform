@@ -183,8 +183,9 @@ const userSchema = new Schema<IUser>(
     timestamps: true,
     toJSON: {
       transform: (_doc, ret: Record<string, any>) => {
-        ret.id = (ret._id as { toString(): string }).toString();
-        delete ret._id;
+        const idStr = (ret._id as { toString(): string })?.toString();
+        ret.id = idStr;
+        ret._id = idStr;
         delete ret.__v;
         delete ret.passwordHash;
         if (ret.security) {

@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { api, API_BASE_URL } from '../../services/api';
+import { api } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useLocationStore } from '../../stores/locationStore';
 import { getCurrentBrowserPosition, reverseGeocode } from '../../services/googleMapsService';
@@ -258,18 +258,85 @@ export const ReportIncidentPage: React.FC = () => {
     }, 600);
   };
 
+  type GpsStatus =
+    | 'idle'
+    | 'requesting'
+    | 'acquiring'
+    | 'geocoding'
+    | 'locked'
+    | 'permission_denied'
+    | 'timeout'
+    | 'unavailable'
+    | 'geocoding_failed';
+  type AddressSource = 'gps' | 'manual' | 'map_click' | 'initial';
+  type SubmissionState =
+    | 'idle'
+    | 'validating'
+    | 'submitting_report'
+    | 'report_saved'
+    | 'generating_pdf'
+    | 'completed'
+    | 'failed';
+
+  const [gpsStatus, setGpsStatus] = useState<GpsStatus>('idle');
+  const [gpsMeta, setGpsMeta] = useState<{
+    lat: number;
+    lng: number;
+    accuracy: number;
+    timestamp: string;
+  } | null>(null);
+  const [addressSource, setAddressSource] = useState<AddressSource>('initial');
+  const [submissionState, setSubmissionState] = useState<SubmissionState>('idle');
+  const [downloadingFormat, setDownloadingFormat] = useState<'pdf' | 'json' | 'csv' | 'txt' | null>(null);
+
   const handleGetLocation = async () => {
+    if (gpsStatus === 'requesting' || gpsStatus === 'acquiring' || gpsStatus === 'geocoding') {
+      return;
+    }
+
+    if (typeof window === 'undefined' || !navigator?.geolocation) {
+      setGpsStatus('unavailable');
+      setError('Geolocation API is not supported by your current browser.');
+      return;
+    }
+
+    setError(null);
+    setGpsStatus('requesting');
+
     try {
+      setGpsStatus('acquiring');
       const pos = await getCurrentBrowserPosition();
+      const meta = {
+        lat: pos.latitude,
+        lng: pos.longitude,
+        accuracy: pos.accuracy,
+        timestamp: pos.timestamp || new Date().toISOString(),
+      };
+      setGpsMeta(meta);
       setCoordinates([pos.longitude, pos.latitude]);
-      const rev = await reverseGeocode(pos.latitude, pos.longitude);
-      setAddress(rev.formattedAddress);
+
+      setGpsStatus('geocoding');
+      try {
+        const rev = await reverseGeocode(pos.latitude, pos.longitude);
+        setAddress(rev.formattedAddress);
+        setAddressSource('gps');
+        setGpsStatus('locked');
+      } catch (geoErr: any) {
+        console.warn('[Civiora Report] Reverse geocoding fallback engaged:', geoErr);
+        setAddressSource('manual');
+        setGpsStatus('geocoding_failed');
+      }
     } catch (err: any) {
-      console.warn('[Civiora Report] GPS location note:', err);
-      alert(err.userMessage || err.message || 'GPS location unavailable. Please select your position on the map.');
+      console.warn('[Civiora Report] GPS acquisition error:', err);
+      if (err.type === 'PERMISSION_DENIED' || err.code === 1) {
+        setGpsStatus('permission_denied');
+      } else if (err.type === 'TIMEOUT' || err.code === 3) {
+        setGpsStatus('timeout');
+      } else {
+        setGpsStatus('unavailable');
+      }
     }
   };
-
 
   const userDisplayName = (user as any)?.profile?.firstName
     ? `${(user as any).profile.firstName} ${(user as any).profile.lastName || ''}`.trim()
@@ -317,18 +384,43 @@ export const ReportIncidentPage: React.FC = () => {
     }
 
     setError(null);
+
+    // Rigorous Client-side validation prior to network dispatch
+    setSubmissionState('validating');
+    if (title.trim().length < 5) {
+      setError('Incident Title must be at least 5 characters in length.');
+      setSubmissionState('failed');
+      return;
+    }
+    if (description.trim().length < 10) {
+      setError('Incident Description must be at least 10 characters so municipal authorities can triage effectively.');
+      setSubmissionState('failed');
+      return;
+    }
+    if (!address.trim()) {
+      setError('Municipal address or sector location is required.');
+      setSubmissionState('failed');
+      return;
+    }
+    if (!coordinates || coordinates.length !== 2 || !Number.isFinite(coordinates[0]) || !Number.isFinite(coordinates[1])) {
+      setError('Valid incident coordinates are required. Please sync GPS or pick a location on the map.');
+      setSubmissionState('failed');
+      return;
+    }
+
+    setSubmissionState('submitting_report');
     setLoading(true);
 
     try {
       // 1. Create and persist incident in MongoDB Atlas
       const res = await api.post('/incidents', {
         category: effectiveCategory,
-        title,
-        description,
+        title: title.trim(),
+        description: description.trim(),
         isEmergency,
         location: {
           coordinates,
-          address,
+          address: address.trim(),
         },
         reportingMode: isEmergency ? 'emergency' : 'standard',
         ai: aiAnalysis ? {
@@ -353,17 +445,21 @@ export const ReportIncidentPage: React.FC = () => {
 
       const incidentData = res.data.data;
       setCreatedIncident(incidentData);
+      setSubmissionState('report_saved');
+
+      const targetId = incidentData.incidentNumber || incidentData._id || incidentData.id;
 
       // 2. Immediate One-Click Municipal Dispatch (PDF Generation + Resend Email)
+      setSubmissionState('generating_pdf');
       setDispatchLoading(true);
       try {
-        const dispatchRes = await api.post(`/incidents/${incidentData._id}/dispatch`, {
+        const dispatchRes = await api.post(`/incidents/${targetId}/dispatch`, {
           name: reporterName.trim() || userDisplayName,
           email: reporterEmail.trim() || user?.email,
           phone: reporterPhone.trim() || undefined,
           additionalMessage: additionalMessage.trim() || undefined,
           consent: consentToShareContact,
-          idempotencyKey: `disp-${incidentData._id}-${Date.now()}`,
+          idempotencyKey: `disp-${targetId}-${Date.now()}`,
         });
 
         if (dispatchRes.data.success) {
@@ -396,9 +492,11 @@ export const ReportIncidentPage: React.FC = () => {
         setDispatchLoading(false);
       }
 
+      setSubmissionState('completed');
       setStep('success');
     } catch (err: any) {
-      const msg = err.response?.data?.error?.message || 'Failed to submit report. Please retry.';
+      setSubmissionState('failed');
+      const msg = err.response?.data?.error?.message || err.message || 'Failed to submit report. Please retry.';
       setError(msg);
     } finally {
       setLoading(false);
@@ -406,16 +504,17 @@ export const ReportIncidentPage: React.FC = () => {
   };
 
   const handleRetryDispatch = async () => {
-    if (!createdIncident?._id || dispatchLoading) return;
+    const targetId = createdIncident?.incidentNumber || createdIncident?._id || createdIncident?.id;
+    if (!targetId || dispatchLoading) return;
     setDispatchLoading(true);
     try {
-      const dispatchRes = await api.post(`/incidents/${createdIncident._id}/dispatch`, {
+      const dispatchRes = await api.post(`/incidents/${targetId}/dispatch`, {
         name: reporterName.trim() || userDisplayName,
         email: reporterEmail.trim() || user?.email,
         phone: reporterPhone.trim() || undefined,
         additionalMessage: additionalMessage.trim() || undefined,
         consent: consentToShareContact,
-        idempotencyKey: `disp-retry-${createdIncident._id}-${Date.now()}`,
+        idempotencyKey: `disp-retry-${targetId}-${Date.now()}`,
       });
 
       if (dispatchRes.data.success) {
@@ -448,24 +547,60 @@ export const ReportIncidentPage: React.FC = () => {
     }
   };
 
-  const handleDownloadPdf = () => {
-    if (!createdIncident?._id) return;
-    window.open(`${API_BASE_URL}/incidents/${createdIncident._id}/report.pdf`, '_blank');
+  const downloadBlobFile = async (
+    endpoint: string,
+    filename: string,
+    mimeType: string,
+    format: 'pdf' | 'json' | 'csv' | 'txt'
+  ) => {
+    setDownloadingFormat(format);
+    try {
+      const res = await api.get(endpoint, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: mimeType });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      }, 300);
+    } catch (err: any) {
+      console.error('Download error:', err);
+      alert(`Could not download ${filename}. ${err.response?.data?.error?.message || err.message || 'Check connection.'}`);
+    } finally {
+      setDownloadingFormat(null);
+    }
   };
 
-  const handleExportJson = () => {
-    if (!createdIncident?._id) return;
-    window.open(`${API_BASE_URL}/incidents/${createdIncident._id}/report/export?format=json`, '_blank');
+  const handleDownloadPdf = async () => {
+    const targetId = createdIncident?.incidentNumber || createdIncident?._id || createdIncident?.id;
+    if (!targetId || downloadingFormat) return;
+    const ref = createdIncident?.incidentNumber || targetId;
+    await downloadBlobFile(`/incidents/${targetId}/report.pdf`, `Civiora_Report_${ref}.pdf`, 'application/pdf', 'pdf');
   };
 
-  const handleExportCsv = () => {
-    if (!createdIncident?._id) return;
-    window.open(`${API_BASE_URL}/incidents/${createdIncident._id}/report/export?format=csv`, '_blank');
+  const handleExportJson = async () => {
+    const targetId = createdIncident?.incidentNumber || createdIncident?._id || createdIncident?.id;
+    if (!targetId || downloadingFormat) return;
+    const ref = createdIncident?.incidentNumber || targetId;
+    await downloadBlobFile(`/incidents/${targetId}/report/export?format=json`, `Civiora-Incident-${ref}.json`, 'application/json', 'json');
   };
 
-  const handleExportTxt = () => {
-    if (!createdIncident?._id) return;
-    window.open(`${API_BASE_URL}/incidents/${createdIncident._id}/report/export?format=txt`, '_blank');
+  const handleExportCsv = async () => {
+    const targetId = createdIncident?.incidentNumber || createdIncident?._id || createdIncident?.id;
+    if (!targetId || downloadingFormat) return;
+    const ref = createdIncident?.incidentNumber || targetId;
+    await downloadBlobFile(`/incidents/${targetId}/report/export?format=csv`, `Civiora-Incident-${ref}.csv`, 'text/csv', 'csv');
+  };
+
+  const handleExportTxt = async () => {
+    const targetId = createdIncident?.incidentNumber || createdIncident?._id || createdIncident?.id;
+    if (!targetId || downloadingFormat) return;
+    const ref = createdIncident?.incidentNumber || targetId;
+    await downloadBlobFile(`/incidents/${targetId}/report/export?format=txt`, `Civiora-Incident-${ref}.txt`, 'text/plain', 'txt');
   };
 
   const handlePrintReport = () => {
@@ -1098,35 +1233,161 @@ export const ReportIncidentPage: React.FC = () => {
                       onLocationSelect={(loc) => {
                         setCoordinates([loc.longitude, loc.latitude]);
                         setAddress(loc.formattedAddress);
+                        setAddressSource('map_click');
+                        setGpsStatus('idle');
                       }}
                       showSearchBar={true}
                     />
                   </div>
                 </div>
 
-
-                <div className="row g-2 align-items-end mb-3">
-                  <div className="col-12 col-md-9">
+                <div className="row g-2 align-items-end mb-2">
+                  <div className="col-12 col-md-8">
                     <GlassInput
                       label="Municipal Address / Sector"
                       required
                       icon="geo-alt"
                       value={address}
-                      onChange={(e) => setAddress(e.target.value)}
+                      onChange={(e) => {
+                        setAddress(e.target.value);
+                        setAddressSource('manual');
+                      }}
                     />
                   </div>
-                  <div className="col-12 col-md-3">
+                  <div className="col-12 col-md-4">
                     <button
                       type="button"
+                      disabled={gpsStatus === 'requesting' || gpsStatus === 'acquiring' || gpsStatus === 'geocoding'}
                       onClick={handleGetLocation}
                       className="btn btn-outline-secondary w-100 py-2 d-flex align-items-center justify-content-center gap-2"
-                      style={{ borderRadius: '12px' }}
+                      style={{
+                        borderRadius: '12px',
+                        borderColor: gpsStatus === 'locked' ? 'rgba(48, 209, 88, 0.4)' : undefined,
+                        background: gpsStatus === 'locked' ? 'rgba(48, 209, 88, 0.1)' : undefined,
+                      }}
                     >
-                      <i className="bi bi-crosshair" />
-                      Sync GPS Lock
+                      {gpsStatus === 'requesting' || gpsStatus === 'acquiring' ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm text-info" role="status" />
+                          <span className="text-info small fw-semibold">Acquiring GPS Fix...</span>
+                        </>
+                      ) : gpsStatus === 'geocoding' ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm text-primary" role="status" />
+                          <span className="text-primary small fw-semibold">Resolving Address...</span>
+                        </>
+                      ) : gpsStatus === 'locked' ? (
+                        <>
+                          <i className="bi bi-check-circle-fill text-success" />
+                          <span className="text-success small fw-semibold">
+                            GPS Locked {gpsMeta ? `(±${gpsMeta.accuracy}m)` : ''}
+                          </span>
+                        </>
+                      ) : gpsStatus === 'permission_denied' ? (
+                        <>
+                          <i className="bi bi-shield-x text-danger" />
+                          <span className="text-danger small fw-semibold">Permission Denied</span>
+                        </>
+                      ) : gpsStatus === 'geocoding_failed' ? (
+                        <>
+                          <i className="bi bi-geo-fill text-warning" />
+                          <span className="text-warning small fw-semibold">Coords Locked</span>
+                        </>
+                      ) : (
+                        <>
+                          <i className="bi bi-crosshair text-info" />
+                          <span>Sync GPS Lock</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
+
+                {/* GPS Metadata & Verification Strip */}
+                {gpsStatus === 'locked' && addressSource === 'gps' && gpsMeta && (
+                  <div
+                    className="mb-3 px-3 py-2 rounded-3 d-flex align-items-center justify-content-between small"
+                    style={{
+                      background: 'rgba(48, 209, 88, 0.1)',
+                      border: '1px solid rgba(48, 209, 88, 0.35)',
+                      color: '#30D158',
+                      fontSize: '0.78rem',
+                    }}
+                  >
+                    <div className="d-flex align-items-center gap-2">
+                      <i className="bi bi-shield-check fs-6" />
+                      <span>
+                        <strong>Hardware GPS Lock Verified:</strong> {gpsMeta.lat.toFixed(5)}°N, {gpsMeta.lng.toFixed(5)}°E • Reported Accuracy: <strong>±{gpsMeta.accuracy}m</strong>
+                      </span>
+                    </div>
+                    <span className="font-monospace text-secondary" style={{ fontSize: '0.72rem' }}>
+                      {new Date(gpsMeta.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                )}
+
+                {addressSource === 'manual' && (
+                  <div
+                    className="mb-3 px-3 py-1.5 rounded-3 d-flex align-items-center gap-2 text-secondary small"
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.04)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      fontSize: '0.78rem',
+                    }}
+                  >
+                    <i className="bi bi-pencil-fill text-info" />
+                    <span>Address manually calibrated. Coordinates remain pinned at {coordinates[1].toFixed(5)}, {coordinates[0].toFixed(5)}.</span>
+                  </div>
+                )}
+
+                {gpsStatus === 'permission_denied' && (
+                  <div
+                    className="mb-3 p-3 rounded-3"
+                    style={{
+                      background: 'rgba(255, 69, 58, 0.12)',
+                      border: '1px solid rgba(255, 69, 58, 0.4)',
+                      color: '#FF453A',
+                    }}
+                  >
+                    <div className="d-flex align-items-center gap-2 fw-semibold mb-1 small">
+                      <i className="bi bi-shield-x fs-6" />
+                      <span>Location Permission Denied in Browser</span>
+                    </div>
+                    <div style={{ color: '#E2E8F0', fontSize: '0.78rem', lineHeight: 1.5 }}>
+                      To allow live location lock: Click the 🔒 lock/tune icon in your browser address bar next to <code>localhost</code>, toggle <strong>Location</strong> to <strong>Allow</strong>, and click <strong>Sync GPS Lock</strong> again. Alternatively, click your exact hazard location on the map above.
+                    </div>
+                  </div>
+                )}
+
+                {gpsStatus === 'geocoding_failed' && (
+                  <div
+                    className="mb-3 p-2.5 px-3 rounded-3 small"
+                    style={{
+                      background: 'rgba(255, 159, 10, 0.12)',
+                      border: '1px solid rgba(255, 159, 10, 0.35)',
+                      color: '#FF9F0A',
+                      fontSize: '0.78rem',
+                    }}
+                  >
+                    <i className="bi bi-exclamation-triangle-fill me-1" />
+                    GPS coordinates locked at {coordinates[1].toFixed(5)}, {coordinates[0].toFixed(5)}. Reverse address geocoding timed out; please verify or manually adjust your street address above.
+                  </div>
+                )}
+
+                {gpsStatus === 'timeout' && (
+                  <div
+                    className="mb-3 p-2.5 px-3 rounded-3 small"
+                    style={{
+                      background: 'rgba(255, 159, 10, 0.12)',
+                      border: '1px solid rgba(255, 159, 10, 0.35)',
+                      color: '#FF9F0A',
+                      fontSize: '0.78rem',
+                    }}
+                  >
+                    <i className="bi bi-clock-history me-1" />
+                    GPS acquisition timed out while waiting for satellite fix. Click <strong>Sync GPS Lock</strong> to retry, or pick your position on the map.
+                  </div>
+                )}
 
                 {/* Reporter Contact & Municipal Dispatch Coordination */}
                 <div
@@ -1148,7 +1409,7 @@ export const ReportIncidentPage: React.FC = () => {
                     </div>
                     <span className="badge rounded-pill bg-primary bg-opacity-20 text-info border border-info border-opacity-30 small">
                       <i className="bi bi-file-earmark-pdf me-1" />
-                      Auto-Generated PDF Dossier Attached
+                      Official Vector PDF Dossier Auto-Generated on Dispatch
                     </span>
                   </div>
 
@@ -1250,6 +1511,13 @@ export const ReportIncidentPage: React.FC = () => {
                   </div>
                 </div>
 
+                {error && (
+                  <div className="alert alert-danger py-2 px-3 small mb-2 d-flex align-items-center gap-2">
+                    <i className="bi bi-exclamation-octagon-fill flex-shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+
                 <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-secondary border-opacity-25">
                   <button
                     type="button"
@@ -1265,10 +1533,12 @@ export const ReportIncidentPage: React.FC = () => {
                     loading={loading || dispatchLoading}
                     icon="send-fill"
                   >
-                    {loading
-                      ? 'Saving Incident...'
-                      : dispatchLoading
-                      ? 'Generating PDF & Dispatching...'
+                    {submissionState === 'validating'
+                      ? 'Validating Incident...'
+                      : submissionState === 'submitting_report'
+                      ? 'Saving Incident to Grid...'
+                      : submissionState === 'report_saved' || submissionState === 'generating_pdf' || dispatchLoading
+                      ? 'Generating Vector PDF & Transmitting...'
                       : 'Submit to Municipal Command'}
                   </GlassButton>
                 </div>
@@ -1420,42 +1690,82 @@ export const ReportIncidentPage: React.FC = () => {
                 <div className="d-flex flex-wrap gap-2 justify-content-center">
                   <button
                     type="button"
+                    disabled={downloadingFormat !== null}
                     onClick={handleDownloadPdf}
                     className="btn btn-primary d-inline-flex align-items-center gap-2 px-3 py-2 rounded-3 shadow-sm"
                     style={{ background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)', border: 'none' }}
                   >
-                    <i className="bi bi-file-earmark-pdf-fill" />
-                    Download PDF Dossier
+                    {downloadingFormat === 'pdf' ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm" role="status" />
+                        <span>Downloading PDF...</span>
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-file-earmark-pdf-fill" />
+                        <span>Download PDF Dossier</span>
+                      </>
+                    )}
                   </button>
 
                   <button
                     type="button"
+                    disabled={downloadingFormat !== null}
                     onClick={handleExportJson}
                     className="btn btn-outline-light d-inline-flex align-items-center gap-1.5 px-3 py-2 rounded-3"
                     style={{ borderColor: 'rgba(159, 201, 255, 0.3)' }}
                   >
-                    <i className="bi bi-code-square text-info" />
-                    Export JSON
+                    {downloadingFormat === 'json' ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm text-info" role="status" />
+                        <span>Exporting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-code-square text-info" />
+                        <span>Export JSON</span>
+                      </>
+                    )}
                   </button>
 
                   <button
                     type="button"
+                    disabled={downloadingFormat !== null}
                     onClick={handleExportCsv}
                     className="btn btn-outline-light d-inline-flex align-items-center gap-1.5 px-3 py-2 rounded-3"
                     style={{ borderColor: 'rgba(159, 201, 255, 0.3)' }}
                   >
-                    <i className="bi bi-file-earmark-spreadsheet text-success" />
-                    Export CSV
+                    {downloadingFormat === 'csv' ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm text-success" role="status" />
+                        <span>Exporting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-file-earmark-spreadsheet text-success" />
+                        <span>Export CSV</span>
+                      </>
+                    )}
                   </button>
 
                   <button
                     type="button"
+                    disabled={downloadingFormat !== null}
                     onClick={handleExportTxt}
                     className="btn btn-outline-light d-inline-flex align-items-center gap-1.5 px-3 py-2 rounded-3"
                     style={{ borderColor: 'rgba(159, 201, 255, 0.3)' }}
                   >
-                    <i className="bi bi-file-earmark-text text-warning" />
-                    Export TXT
+                    {downloadingFormat === 'txt' ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm text-warning" role="status" />
+                        <span>Exporting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-file-earmark-text text-warning" />
+                        <span>Export TXT</span>
+                      </>
+                    )}
                   </button>
 
                   <button

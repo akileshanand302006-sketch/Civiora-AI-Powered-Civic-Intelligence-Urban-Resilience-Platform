@@ -293,6 +293,27 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
     };
   }, [interactive, handleCoordUpdate, onBoundsChange]);
 
+  // Synchronize pin and map center when initialLat / initialLng change from external source (e.g. GPS Sync)
+  useEffect(() => {
+    if (initialLat === undefined || initialLng === undefined) return;
+    if (!Number.isFinite(initialLat) || !Number.isFinite(initialLng)) return;
+
+    const latDiff = Math.abs(currentCoords.lat - initialLat);
+    const lngDiff = Math.abs(currentCoords.lng - initialLng);
+    if (latDiff > 0.00001 || lngDiff > 0.00001) {
+      setCurrentCoords({ lat: initialLat, lng: initialLng });
+      if (mainMarkerRef.current) {
+        mainMarkerRef.current.setPosition({ lat: initialLat, lng: initialLng });
+      }
+      if (accuracyCircleRef.current) {
+        accuracyCircleRef.current.setCenter({ lat: initialLat, lng: initialLng });
+      }
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.panTo({ lat: initialLat, lng: initialLng });
+      }
+    }
+  }, [initialLat, initialLng, currentCoords.lat, currentCoords.lng]);
+
   // Handle selectedDistrictId prop updates: smoothly fly to district bounds
   useEffect(() => {
     if (!selectedDistrictId || !mapInstanceRef.current || !window.google?.maps) return;

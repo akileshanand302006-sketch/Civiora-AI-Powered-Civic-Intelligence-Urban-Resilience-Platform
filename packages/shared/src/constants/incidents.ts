@@ -96,7 +96,9 @@ export const INCIDENT_STATUSES = {
   VERIFIED: 'verified',
   TRIAGED: 'triaged',
   ASSIGNED: 'assigned',
+  ACCEPTED: 'accepted',
   IN_PROGRESS: 'in_progress',
+  AWAITING_VERIFICATION: 'awaiting_verification',
   EVIDENCE_SUBMITTED: 'evidence_submitted',
   RESOLVED: 'resolved',
   CLOSED: 'closed',
@@ -111,7 +113,9 @@ export const INCIDENT_STATUS_LABELS: Record<IncidentStatus, string> = {
   verified: 'Verified',
   triaged: 'Triaged',
   assigned: 'Assigned',
+  accepted: 'Accepted by Field Worker',
   in_progress: 'In Progress',
+  awaiting_verification: 'Awaiting Verification',
   evidence_submitted: 'Evidence Submitted',
   resolved: 'Resolved',
   closed: 'Closed',
@@ -121,16 +125,18 @@ export const INCIDENT_STATUS_LABELS: Record<IncidentStatus, string> = {
 
 /** Valid status transitions (state machine) */
 export const INCIDENT_STATUS_TRANSITIONS: Record<IncidentStatus, IncidentStatus[]> = {
-  reported: ['verified', 'triaged', 'rejected'],
-  verified: ['triaged', 'rejected'],
-  triaged: ['assigned', 'rejected'],
-  assigned: ['in_progress', 'triaged'], // can reassign
-  in_progress: ['evidence_submitted', 'assigned'],
-  evidence_submitted: ['resolved', 'in_progress'],
+  reported: ['verified', 'triaged', 'assigned', 'in_progress', 'rejected'],
+  verified: ['triaged', 'assigned', 'in_progress', 'rejected'],
+  triaged: ['assigned', 'in_progress', 'rejected'],
+  assigned: ['accepted', 'in_progress', 'triaged', 'resolved', 'rejected'],
+  accepted: ['in_progress', 'assigned', 'rejected'],
+  in_progress: ['awaiting_verification', 'evidence_submitted', 'resolved', 'assigned', 'closed'],
+  awaiting_verification: ['resolved', 'in_progress', 'rejected'],
+  evidence_submitted: ['awaiting_verification', 'resolved', 'in_progress'],
   resolved: ['closed', 'reopened'],
   closed: ['reopened'],
-  rejected: ['reported'], // can reopen
-  reopened: ['triaged', 'assigned'],
+  rejected: ['reported', 'triaged', 'reopened'],
+  reopened: ['triaged', 'assigned', 'in_progress'],
 };
 
 // ── Priorities ──────────────────────────────────────────────

@@ -441,3 +441,311 @@ export async function generateIncidentPdf(report: IncidentReportDTO): Promise<Bu
 }
 
 export const generateIncidentPDF = generateIncidentPdf;
+
+export interface ResolutionPdfData {
+  incidentNumber: string;
+  title: string;
+  categoryLabel: string;
+  locationAddress: string;
+  coordinates?: [number, number];
+  submittedAt: string | Date;
+  resolvedAt: string | Date;
+  startedAt?: string | Date;
+  completedAt?: string | Date;
+  elapsedSeconds: number;
+  activeWorkSeconds: number;
+  workerName: string;
+  verifierName: string;
+  verifierRole: string;
+  departmentName?: string;
+  completionSummary: string;
+  inspectionNotes?: string;
+  materialsUsed?: string;
+  resolutionId: string;
+  version: number;
+  contentHash: string;
+}
+
+/**
+ * Generates an authoritative Final Resolution PDF Dossier for an approved incident.
+ */
+export async function generateResolutionPdf(data: ResolutionPdfData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({
+        size: 'A4',
+        margin: 40,
+        info: {
+          Title: `Civiora Resolution Report - ${data.incidentNumber} v${data.version}`,
+          Author: 'Civiora AI Civic Operations Platform',
+          Subject: `Municipal Resolution Dossier: ${data.title}`,
+          Keywords: 'civiora, resolution, municipal, work order, verification, proof',
+          CreationDate: new Date(),
+        },
+        bufferPages: true,
+      });
+
+      const buffers: Buffer[] = [];
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => {
+        const pdfData = Buffer.concat(buffers);
+        resolve(pdfData);
+      });
+      doc.on('error', reject);
+
+      const pageWidth = doc.page.width;
+      const contentWidth = pageWidth - 80;
+
+      const colors = {
+        primaryNavy: '#0B1321',
+        secondaryNavy: '#10213A',
+        successGreen: '#10B981',
+        successBg: '#ECFDF5',
+        successBorder: '#059669',
+        accentBlue: '#527FC7',
+        accentIce: '#9FC9FF',
+        textDark: '#1E293B',
+        textMuted: '#64748B',
+        borderLight: '#CBD5E1',
+        bgCard: '#F8FAFC',
+      };
+
+      const formatMins = (secs: number) => {
+        if (!secs || secs < 60) return `${secs || 0} seconds`;
+        const m = Math.floor(secs / 60);
+        const h = Math.floor(m / 60);
+        const remM = m % 60;
+        return h > 0 ? `${h}h ${remM}m` : `${m} minutes`;
+      };
+
+      const formatDate = (d?: string | Date) => {
+        if (!d) return 'N/A';
+        return new Date(d).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST';
+      };
+
+      // ── 1. HEADER BAND (Liquid Emerald & Navy) ──────────────
+      doc
+        .rect(40, 40, contentWidth, 76)
+        .fillAndStroke(colors.primaryNavy, colors.successGreen);
+
+      doc
+        .fillColor('#FFFFFF')
+        .fontSize(20)
+        .font('Helvetica-Bold')
+        .text('CIVIORA', 56, 52, { characterSpacing: 1.5 });
+
+      doc
+        .fillColor(colors.accentIce)
+        .fontSize(8.5)
+        .font('Helvetica')
+        .text('OFFICIAL MUNICIPAL RESOLUTION & VERIFICATION DOSSIER', 56, 76, { characterSpacing: 0.5 });
+
+      doc
+        .fillColor('#94A3B8')
+        .fontSize(7.5)
+        .text('STATEWIDE TAMIL NADU URBAN RESILIENCE & OPERATIONS PLATFORM', 56, 88);
+
+      // Dossier Badge (Top-Right)
+      doc
+        .rect(pageWidth - 210, 48, 160, 56)
+        .fillAndStroke(colors.secondaryNavy, colors.successBorder);
+
+      doc
+        .fillColor(colors.successGreen)
+        .fontSize(9)
+        .font('Helvetica-Bold')
+        .text('✓ RESOLUTION APPROVED', pageWidth - 200, 56);
+
+      doc
+        .fillColor('#E2E8F0')
+        .fontSize(7.5)
+        .font('Helvetica')
+        .text(`ID: ${data.resolutionId}`, pageWidth - 200, 70);
+
+      doc
+        .fillColor('#94A3B8')
+        .fontSize(7)
+        .text(`Version: ${data.version}.0 • ${formatDate(data.resolvedAt)}`, pageWidth - 200, 84);
+
+      doc.y = 130;
+
+      // ── 2. EXECUTIVE RESOLUTION BANNER ───────────────────────
+      doc
+        .rect(40, doc.y, contentWidth, 38)
+        .fillAndStroke(colors.successBg, colors.successBorder);
+
+      doc
+        .fillColor(colors.successBorder)
+        .fontSize(10)
+        .font('Helvetica-Bold')
+        .text(`CIVIC HAZARD OFFICIALLY RESOLVED — #${data.incidentNumber}`, 52, doc.y + 8);
+
+      doc
+        .fillColor(colors.textDark)
+        .fontSize(8.5)
+        .font('Helvetica')
+        .text(
+          `Verified by Department Authority: ${data.verifierName} (${data.verifierRole}) • Department: ${data.departmentName || 'Municipal Grid Operations'}`,
+          52,
+          doc.y + 22
+        );
+
+      doc.y += 48;
+
+      // ── 3. INCIDENT CONTEXT & WORK SESSION OVERVIEW ──────────
+      const colWidth = (contentWidth - 16) / 2;
+      const cardY = doc.y;
+
+      // Left Column: Original Incident
+      doc
+        .rect(40, cardY, colWidth, 120)
+        .fillAndStroke(colors.bgCard, colors.borderLight);
+
+      doc
+        .fillColor(colors.primaryNavy)
+        .fontSize(9)
+        .font('Helvetica-Bold')
+        .text('ORIGINAL INCIDENT DETAILS', 50, cardY + 10);
+
+      doc
+        .fillColor(colors.textMuted)
+        .fontSize(8)
+        .font('Helvetica')
+        .text(`Category: ${data.categoryLabel}`, 50, cardY + 28)
+        .text(`Reported: ${formatDate(data.submittedAt)}`, 50, cardY + 42)
+        .text(`Address: ${data.locationAddress}`, 50, cardY + 56, { width: colWidth - 20 })
+        .text(
+          `GPS Coordinates: ${data.coordinates ? `${data.coordinates[1].toFixed(5)}° N, ${data.coordinates[0].toFixed(5)}° E` : 'Standard Sector Grid'}`,
+          50,
+          cardY + 84
+        );
+
+      // Right Column: Field Work Session
+      doc
+        .rect(40 + colWidth + 16, cardY, colWidth, 120)
+        .fillAndStroke(colors.bgCard, colors.borderLight);
+
+      doc
+        .fillColor(colors.primaryNavy)
+        .fontSize(9)
+        .font('Helvetica-Bold')
+        .text('WORK SESSION & EXECUTION', 50 + colWidth + 16, cardY + 10);
+
+      doc
+        .fillColor(colors.textMuted)
+        .fontSize(8)
+        .font('Helvetica')
+        .text(`Field Worker: ${data.workerName}`, 50 + colWidth + 16, cardY + 28)
+        .text(`Work Started: ${formatDate(data.startedAt)}`, 50 + colWidth + 16, cardY + 42)
+        .text(`Work Completed: ${formatDate(data.completedAt)}`, 50 + colWidth + 16, cardY + 56)
+        .text(`Total Elapsed Time: ${formatMins(data.elapsedSeconds)}`, 50 + colWidth + 16, cardY + 70)
+        .text(`Active Working Duration: ${formatMins(data.activeWorkSeconds)}`, 50 + colWidth + 16, cardY + 84);
+
+      doc.y = cardY + 130;
+
+      // ── 4. COMPLETION SUMMARY & INSPECTION NOTES ─────────────
+      doc
+        .rect(40, doc.y, contentWidth, 80)
+        .fillAndStroke(colors.bgCard, colors.borderLight);
+
+      doc
+        .fillColor(colors.primaryNavy)
+        .fontSize(9)
+        .font('Helvetica-Bold')
+        .text('WORK COMPLETION SUMMARY & ON-SITE REPAIR RECORD', 50, doc.y + 10);
+
+      doc
+        .fillColor(colors.textDark)
+        .fontSize(8.5)
+        .font('Helvetica')
+        .text(data.completionSummary || 'Repair work successfully completed to municipal technical standards.', 50, doc.y + 26, {
+          width: contentWidth - 20,
+        });
+
+      if (data.materialsUsed || data.inspectionNotes) {
+        doc
+          .fillColor(colors.textMuted)
+          .fontSize(8)
+          .text(
+            `Materials/Equipment: ${data.materialsUsed || 'Standard equipment deployed'} • Inspection Notes: ${data.inspectionNotes || 'None'}`,
+            50,
+            doc.y + 54,
+            { width: contentWidth - 20 }
+          );
+      }
+
+      doc.y += 92;
+
+      // ── 5. VERIFICATION & AUDIT INTEGRITY BOX ─────────────────
+      doc
+        .rect(40, doc.y, contentWidth, 75)
+        .fillAndStroke('#F0FDF4', colors.successBorder);
+
+      doc
+        .fillColor(colors.successBorder)
+        .fontSize(9)
+        .font('Helvetica-Bold')
+        .text('MUNICIPAL VERIFICATION & DIGITAL SIGN-OFF', 50, doc.y + 10);
+
+      doc
+        .fillColor(colors.textDark)
+        .fontSize(8)
+        .font('Helvetica')
+        .text(
+          `This resolution has been formally inspected and verified by ${data.verifierName} (${data.verifierRole}). In accordance with municipal accountability policy, field worker and verification roles are strictly separated.`,
+          50,
+          doc.y + 26,
+          { width: contentWidth - 20 }
+        );
+
+      doc
+        .fillColor(colors.textMuted)
+        .fontSize(7.5)
+        .font('Helvetica-Bold')
+        .text(`DOCUMENT SHA-256 INTEGRITY CHECKSUM:`, 50, doc.y + 50);
+
+      doc
+        .fillColor(colors.primaryNavy)
+        .fontSize(7)
+        .font('Courier')
+        .text(data.contentHash || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', 50, doc.y + 60);
+
+      doc.y += 85;
+
+      // ── 6. MULTI-PAGE NUMBERING & FOOTER ────────────────────
+      const totalPages = doc.bufferedPageRange().count;
+      for (let i = 0; i < totalPages; i++) {
+        doc.switchToPage(i);
+
+        doc
+          .moveTo(40, doc.page.height - 44)
+          .lineTo(pageWidth - 40, doc.page.height - 44)
+          .strokeColor(colors.borderLight)
+          .stroke();
+
+        doc
+          .fillColor(colors.textMuted)
+          .fontSize(7)
+          .font('Helvetica')
+          .text(
+            `CIVIORA AUTHORITATIVE RESOLUTION DOSSIER • INCIDENT: ${data.incidentNumber} • VERSION ${data.version}`,
+            40,
+            doc.page.height - 34
+          );
+
+        doc
+          .fillColor(colors.textMuted)
+          .fontSize(7)
+          .text(`Page ${i + 1} of ${totalPages}`, pageWidth - 140, doc.page.height - 34, {
+            align: 'right',
+            width: 100,
+          });
+      }
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+

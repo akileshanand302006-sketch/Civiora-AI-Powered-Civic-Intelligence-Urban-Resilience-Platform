@@ -34,10 +34,21 @@ const STATUS_CONFIG: Record<
     text: '#0A84FF',
     border: 'rgba(10, 132, 255, 0.3)',
   },
+  accepted: {
+    bg: 'rgba(100, 210, 255, 0.15)',
+    text: '#64D2FF',
+    border: 'rgba(100, 210, 255, 0.4)',
+  },
   in_progress: {
     bg: 'rgba(255, 214, 10, 0.15)',
     text: '#FFD60A',
     border: 'rgba(255, 214, 10, 0.4)',
+    pulse: true,
+  },
+  awaiting_verification: {
+    bg: 'rgba(255, 159, 10, 0.15)',
+    text: '#FF9F0A',
+    border: 'rgba(255, 159, 10, 0.4)',
     pulse: true,
   },
   evidence_submitted: {

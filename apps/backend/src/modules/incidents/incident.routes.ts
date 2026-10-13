@@ -23,12 +23,16 @@ router.get('/metrics', optionalAuthenticate, incidentController.metrics);
 // Incident Dossier & Municipal Dispatch routes
 router.get('/:id/report.pdf', optionalAuthenticate, reportController.getReportPdf);
 router.post('/:id/report/pdf', optionalAuthenticate, reportController.getReportPdf);
+router.get('/:id/resolution.pdf', optionalAuthenticate, reportController.getResolutionPdf);
+router.get('/:id/resolution', optionalAuthenticate, reportController.getResolutionDocument);
 router.get('/:id/report/export', optionalAuthenticate, reportController.exportReport);
 router.get('/:id/export', optionalAuthenticate, reportController.exportReport);
 router.post('/:id/dispatch', optionalAuthenticate, reportController.dispatchReport);
 router.post('/:id/dispatch/retry', optionalAuthenticate, reportController.dispatchReport);
 router.get('/:id/dispatch/status', optionalAuthenticate, reportController.getDispatchStatus);
 router.get('/:id/dispatch-status', optionalAuthenticate, reportController.getDispatchStatus);
+router.get('/:id/audit-chain', optionalAuthenticate, incidentController.getAuditChain);
+router.get('/:id/sla', optionalAuthenticate, incidentController.getSla);
 
 router.get('/:id', optionalAuthenticate, incidentController.getById);
 
@@ -55,6 +59,13 @@ router.patch(
 );
 
 router.post(
+  '/:id/assign',
+  authenticate,
+  requireRole('officer', 'manager', 'tenant_admin', 'system_admin'),
+  incidentController.assign,
+);
+
+router.patch(
   '/:id/assign',
   authenticate,
   requireRole('officer', 'manager', 'tenant_admin', 'system_admin'),
