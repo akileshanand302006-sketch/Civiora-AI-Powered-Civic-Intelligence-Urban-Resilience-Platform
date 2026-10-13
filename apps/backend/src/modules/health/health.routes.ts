@@ -5,6 +5,7 @@
 import { Router, type Request, type Response } from 'express';
 import mongoose from 'mongoose';
 import { getRedis } from '../../config/redis.js';
+import { runDatabaseSeed } from '../../seed/seed.js';
 
 const router = Router();
 
@@ -22,6 +23,24 @@ router.get('/health', (_req: Request, res: Response) => {
       uptime: process.uptime(),
     },
   });
+});
+
+/**
+ * POST /seed — on-demand database seed
+ */
+router.post('/seed', async (_req: Request, res: Response) => {
+  try {
+    await runDatabaseSeed();
+    res.json({
+      success: true,
+      message: 'Civiora database successfully seeded with demo personas, SLA policies, and digital twin assets',
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
 });
 
 /**

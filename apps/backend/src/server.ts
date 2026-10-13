@@ -9,6 +9,8 @@ import { initializeDatabaseIndexes } from './config/initIndexes.js';
 import { disconnectRedis } from './config/redis.js';
 import { initSocketServer } from './socket/socketServer.js';
 import { logger } from './utils/logger.js';
+import { User } from './modules/users/user.model.js';
+import { runDatabaseSeed } from './seed/seed.js';
 
 async function bootstrap(): Promise<void> {
   logger.info(`
@@ -20,6 +22,18 @@ async function bootstrap(): Promise<void> {
 
   // Connect to databases
   await connectDatabase();
+
+  // Auto-seed demo personas and organization if database is unseeded
+  try {
+    const userCount = await User.countDocuments();
+    if (userCount === 0) {
+      logger.info('🌱 Database has 0 users. Auto-seeding default operational personas...');
+      await runDatabaseSeed();
+      logger.info('✅ Database auto-seeded successfully.');
+    }
+  } catch (seedErr) {
+    logger.warn({ err: seedErr }, 'Database auto-seed check notice');
+  }
   
   // Initialize and verify all collection indexes (2dsphere, unique, compound, TTL)
   initializeDatabaseIndexes().catch((err) => {

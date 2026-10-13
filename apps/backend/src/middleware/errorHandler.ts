@@ -6,7 +6,6 @@ import { type Request, type Response, type NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { AppError } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
-import { env } from '../config/env.js';
 
 export function errorHandler(
   err: Error,
@@ -39,20 +38,26 @@ export function errorHandler(
     return;
   }
 
-  // Known operational errors
-  if (err instanceof AppError) {
-    if (err.statusCode >= 500) {
-      logger.error({ err, requestId }, err.message);
+  // Known operational errors (robust check supporting cross-module bundling)
+  const isAppError =
+    err instanceof AppError ||
+    (err && typeof (err as any).statusCode === 'number' && typeof (err as any).code === 'string');
+
+  if (isAppError) {
+    const appErr = err as AppError;
+    const statusCode = appErr.statusCode || 500;
+    if (statusCode >= 500) {
+      logger.error({ err, requestId }, appErr.message);
     } else {
-      logger.warn({ requestId, code: err.code }, err.message);
+      logger.warn({ requestId, code: appErr.code }, appErr.message);
     }
 
-    res.status(err.statusCode).json({
+    res.status(statusCode).json({
       success: false,
       error: {
-        code: err.code,
-        message: err.message,
-        details: err.details,
+        code: appErr.code,
+        message: appErr.message,
+        details: appErr.details,
         requestId,
       },
     });
@@ -83,9 +88,7 @@ export function errorHandler(
     success: false,
     error: {
       code: 'INTERNAL_ERROR',
-      message: env.NODE_ENV === 'production'
-        ? 'An unexpected error occurred'
-        : err.message,
+      message: err.message || 'An unexpected error occurred',
       requestId,
     },
   });
