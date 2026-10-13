@@ -22,7 +22,9 @@ import {
 import {
   INCIDENT_CATEGORY_LABELS,
   type IncidentStatus,
+  type ReportFormat,
 } from '@civicpulse/shared';
+import { downloadReportFile } from '../../utils/downloadReport';
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -221,42 +223,26 @@ export const DashboardPage: React.FC = () => {
   };
 
   // Download multi-format report dossier with direct blob streams
-  const handleDownloadReport = async (incidentId: string, format: 'pdf' | 'resolution_pdf' | 'csv' | 'json' | 'txt') => {
+  const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
+
+  const handleDownloadReport = async (
+    incidentId: string,
+    format: ReportFormat,
+    kind: 'incident' | 'resolution' = 'incident'
+  ) => {
+    const key = `${incidentId}-${kind}-${format}`;
+    setDownloadingKey(key);
     try {
-      let endpoint = `/incidents/${incidentId}/report.pdf`;
-      let filename = `Civiora_Report_${incidentId}.pdf`;
-      let mimeType = 'application/pdf';
-
-      if (format === 'resolution_pdf') {
-        endpoint = `/incidents/${incidentId}/resolution.pdf`;
-        filename = `Civiora_Resolution_${incidentId}.pdf`;
-      } else if (format === 'csv') {
-        endpoint = `/incidents/${incidentId}/report/export?format=csv`;
-        filename = `Civiora_Data_${incidentId}.csv`;
-        mimeType = 'text/csv';
-      } else if (format === 'json') {
-        endpoint = `/incidents/${incidentId}/report/export?format=json`;
-        filename = `Civiora_Data_${incidentId}.json`;
-        mimeType = 'application/json';
-      } else if (format === 'txt') {
-        endpoint = `/incidents/${incidentId}/report/export?format=txt`;
-        filename = `Civiora_Summary_${incidentId}.txt`;
-        mimeType = 'text/plain';
-      }
-
-      const response = await api.get(endpoint, { responseType: 'blob' });
-      const blob = new Blob([response.data], { type: mimeType });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      window.URL.revokeObjectURL(url);
-      link.remove();
+      await downloadReportFile({
+        kind,
+        incidentIdOrNumber: incidentId,
+        format,
+      });
     } catch (err: any) {
       console.error('Download error:', err);
-      alert('File download failed. If this is a resolution document, it is only available after resolution verification is approved.');
+      alert(err.message || 'File download failed. If this is a resolution document, it is only available after resolution verification is approved.');
+    } finally {
+      setDownloadingKey(null);
     }
   };
 
@@ -1543,7 +1529,8 @@ export const DashboardPage: React.FC = () => {
                 <button
                   type="button"
                   className="btn btn-sm btn-success d-inline-flex align-items-center gap-2 fw-semibold"
-                  onClick={() => handleDownloadReport(selectedIncident._id || selectedIncident.id, 'resolution_pdf')}
+                  disabled={downloadingKey !== null}
+                  onClick={() => handleDownloadReport(selectedIncident._id || selectedIncident.id, 'pdf', 'resolution')}
                 >
                   <i className="bi bi-file-earmark-check-fill" /> Download Final Resolution PDF Dossier
                 </button>
@@ -1567,7 +1554,8 @@ export const DashboardPage: React.FC = () => {
                 <button
                   type="button"
                   className="btn btn-sm btn-outline-danger"
-                  onClick={() => handleDownloadReport(selectedIncident._id || selectedIncident.id, 'pdf')}
+                  disabled={downloadingKey !== null}
+                  onClick={() => handleDownloadReport(selectedIncident._id || selectedIncident.id, 'pdf', 'incident')}
                 >
                   <i className="bi bi-file-earmark-pdf me-1" /> Original Report PDF
                 </button>
@@ -1575,7 +1563,8 @@ export const DashboardPage: React.FC = () => {
                   <button
                     type="button"
                     className="btn btn-sm btn-outline-success"
-                    onClick={() => handleDownloadReport(selectedIncident._id || selectedIncident.id, 'resolution_pdf')}
+                    disabled={downloadingKey !== null}
+                    onClick={() => handleDownloadReport(selectedIncident._id || selectedIncident.id, 'pdf', 'resolution')}
                   >
                     <i className="bi bi-file-earmark-check-fill me-1" /> Resolution PDF
                   </button>
@@ -1583,21 +1572,24 @@ export const DashboardPage: React.FC = () => {
                 <button
                   type="button"
                   className="btn btn-sm btn-outline-success"
-                  onClick={() => handleDownloadReport(selectedIncident._id || selectedIncident.id, 'csv')}
+                  disabled={downloadingKey !== null}
+                  onClick={() => handleDownloadReport(selectedIncident._id || selectedIncident.id, 'csv', 'incident')}
                 >
                   <i className="bi bi-file-earmark-spreadsheet me-1" /> CSV
                 </button>
                 <button
                   type="button"
                   className="btn btn-sm btn-outline-warning"
-                  onClick={() => handleDownloadReport(selectedIncident._id || selectedIncident.id, 'json')}
+                  disabled={downloadingKey !== null}
+                  onClick={() => handleDownloadReport(selectedIncident._id || selectedIncident.id, 'json', 'incident')}
                 >
                   <i className="bi bi-filetype-json me-1" /> JSON
                 </button>
                 <button
                   type="button"
                   className="btn btn-sm btn-outline-info"
-                  onClick={() => handleDownloadReport(selectedIncident._id || selectedIncident.id, 'txt')}
+                  disabled={downloadingKey !== null}
+                  onClick={() => handleDownloadReport(selectedIncident._id || selectedIncident.id, 'txt', 'incident')}
                 >
                   <i className="bi bi-file-earmark-text me-1" /> Text
                 </button>

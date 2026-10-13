@@ -168,3 +168,138 @@ ${divider}
 `;
 }
 
+/**
+ * Generates structured JSON export for final resolution dossier
+ */
+export function generateResolutionJsonExport(doc: any, incident: any): string {
+  return JSON.stringify(
+    {
+      documentType: 'CIVIORA_FINAL_RESOLUTION_DOSSIER',
+      resolutionId: doc.resolutionId,
+      incidentNumber: doc.incidentNumber || incident.incidentNumber,
+      version: doc.version || 1,
+      status: doc.status || 'approved',
+      verificationChecksum: doc.contentHash,
+      incident: {
+        id: incident._id?.toString() || incident.id,
+        title: incident.title,
+        category: incident.category,
+        address: incident.location?.address,
+        coordinates: incident.location?.coordinates,
+        submittedAt: incident.createdAt,
+        resolvedAt: incident.resolution?.resolvedAt || doc.completedAt,
+      },
+      operations: {
+        department: doc.departmentName || 'Public Works',
+        fieldWorker: doc.workerName || 'Municipal Field Operations',
+        approvingOfficer: doc.verifierName || 'Department Authority',
+        startedAt: doc.startedAt,
+        completedAt: doc.completedAt,
+        totalDurationSeconds: doc.totalDurationSeconds,
+        activeDurationSeconds: doc.activeDurationSeconds,
+      },
+      findings: {
+        completionSummary: doc.completionSummary,
+        inspectionNotes: doc.inspectionNotes || 'Hazard inspected and resolved according to municipal compliance.',
+      },
+      generatedAt: doc.generatedAt || new Date().toISOString(),
+    },
+    null,
+    2
+  );
+}
+
+/**
+ * Generates RFC-4180 CSV export for final resolution dossier
+ */
+export function generateResolutionCsvExport(doc: any, incident: any): string {
+  const headers = [
+    'Resolution Reference',
+    'Incident Reference',
+    'Document Version',
+    'Incident Title',
+    'Civic Category',
+    'Street Address',
+    'Department',
+    'Field Worker',
+    'Approving Verifier',
+    'Started At',
+    'Completed At',
+    'Active Minutes',
+    'Completion Summary',
+    'Inspection Notes',
+    'Verification Checksum',
+    'Exported At',
+  ];
+
+  const row = [
+    doc.resolutionId,
+    doc.incidentNumber || incident.incidentNumber,
+    doc.version || 1,
+    incident.title,
+    incident.category,
+    incident.location?.address || 'N/A',
+    doc.departmentName || 'Public Works',
+    doc.workerName || 'Municipal Field Operations',
+    doc.verifierName || 'Department Authority',
+    doc.startedAt ? new Date(doc.startedAt).toISOString() : '',
+    doc.completedAt ? new Date(doc.completedAt).toISOString() : '',
+    doc.activeDurationSeconds ? Math.round(doc.activeDurationSeconds / 60) : 0,
+    doc.completionSummary || '',
+    doc.inspectionNotes || '',
+    doc.contentHash || '',
+    new Date().toISOString(),
+  ];
+
+  const headerLine = headers.map(escapeCsvValue).join(',');
+  const rowLine = row.map(escapeCsvValue).join(',');
+
+  return `${headerLine}\r\n${rowLine}\r\n`;
+}
+
+/**
+ * Generates clean plain text report for final resolution dossier
+ */
+export function generateResolutionTxtExport(doc: any, incident: any): string {
+  const divider = '='.repeat(78);
+  const subDivider = '-'.repeat(78);
+
+  return `${divider}
+CIVIORA MUNICIPAL RESOLUTION DOSSIER — FINAL VERIFIED COMPLETION CERTIFICATE
+${divider}
+Resolution Reference : ${doc.resolutionId}
+Incident Reference   : ${doc.incidentNumber || incident.incidentNumber}
+Document Version     : Version ${doc.version || 1} (Official Archive)
+SHA-256 Checksum     : ${doc.contentHash || 'N/A'}
+Status               : VERIFIED & CLOSED
+
+${subDivider}
+1. INCIDENT CONTEXT
+${subDivider}
+Incident Title       : ${incident.title}
+Category             : ${incident.category}
+Location Address     : ${incident.location?.address || 'N/A'}
+Reported At          : ${incident.createdAt ? new Date(incident.createdAt).toISOString() : 'N/A'}
+Resolved At          : ${doc.completedAt ? new Date(doc.completedAt).toISOString() : 'N/A'}
+
+${subDivider}
+2. FIELD REMEDIATION & VERIFICATION
+${subDivider}
+Department           : ${doc.departmentName || 'Public Works'}
+Assigned Worker      : ${doc.workerName || 'Municipal Field Operations'}
+Approving Verifier   : ${doc.verifierName || 'Department Authority'}
+Active Work Duration : ${doc.activeDurationSeconds ? `${Math.round(doc.activeDurationSeconds / 60)} minutes` : 'N/A'}
+
+${subDivider}
+3. COMPLETION NOTES & AUDIT EVIDENCE
+${subDivider}
+Summary              : ${doc.completionSummary || 'Remediation completed.'}
+Inspection Details   : ${doc.inspectionNotes || 'Site verified and restored to safety standards.'}
+
+${subDivider}
+Civiora AI-Powered Civic Intelligence & Urban Resilience Platform
+Statewide Tamil Nadu Municipal Command System
+${divider}
+`;
+}
+

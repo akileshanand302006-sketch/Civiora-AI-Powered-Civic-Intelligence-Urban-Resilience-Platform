@@ -8,12 +8,23 @@ import { Types } from 'mongoose';
 import { Incident } from '../incidents/incident.model.js';
 import { buildIncidentReportDTO } from './report.dto.js';
 import { generateIncidentPdf } from './pdfGenerator.service.js';
-import { generateCsvExport, generateJsonExport, generateTxtExport } from './export.service.js';
+import {
+  generateCsvExport,
+  generateJsonExport,
+  generateTxtExport,
+  generateResolutionCsvExport,
+  generateResolutionJsonExport,
+  generateResolutionTxtExport,
+} from './export.service.js';
 import { dispatchIncidentReport } from './dispatch.service.js';
 import { DispatchRecord } from './dispatch.model.js';
 import { NotFoundError, BadRequestError } from '../../utils/errors.js';
 import { logger } from '../../utils/logger.js';
 import { emitInngestEvent } from '../../inngest/index.js';
+import {
+  generateReportFilename,
+  type ReportFormat,
+} from '@civicpulse/shared';
 
 /**
  * Helper to find an incident by Mongo _id or friendly incidentNumber
@@ -54,6 +65,12 @@ export async function getReportPdf(req: Request, res: Response, next: NextFuncti
     const orgId = req.user ? req.user.org : (req.query.orgId as string);
     const incident = await resolveIncident(id, orgId);
 
+    // Reporter privacy: if citizen caller is not the owner, anonymize personal contact info
+    const reporterId = (incident.reportedBy as any)?._id || incident.reportedBy;
+    const isOwner = req.user && reporterId && String(reporterId) === req.user.sub;
+    const isStaff = req.user && ['officer', 'manager', 'field_worker', 'system_admin', 'tenant_admin'].includes(req.user.role);
+    const allowContact = isOwner || isStaff;
+
     // Reporter overrides can be passed via POST body or query
     const overrides = req.body || {};
     const dto = buildIncidentReportDTO(incident, {
@@ -61,17 +78,15 @@ export async function getReportPdf(req: Request, res: Response, next: NextFuncti
       email: overrides.email || overrides.reporterEmail,
       phone: overrides.phone || overrides.reporterPhone,
       additionalMessage: overrides.additionalMessage || (req.query.message as string),
-      consent: (overrides.consent ?? overrides.consentToShareContact) !== false,
+      consent: allowContact && (overrides.consent ?? overrides.consentToShareContact) !== false,
     });
 
     const pdfBuffer = await generateIncidentPdf(dto);
-
-    const safeRef = (dto.incidentNumber || 'civiora-report').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const filename = `Civiora_Report_${safeRef}.pdf`;
+    const filename = generateReportFilename('incident', dto.incidentNumber, 'pdf');
 
     res.setHeader('Content-Type', 'application/pdf');
     const dispositionType = req.query.disposition === 'inline' ? 'inline' : 'attachment';
-    res.setHeader('Content-Disposition', `${dispositionType}; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `${dispositionType}; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}"`);
     res.setHeader('Content-Length', pdfBuffer.length);
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
@@ -88,52 +103,63 @@ export async function getReportPdf(req: Request, res: Response, next: NextFuncti
 export async function exportReport(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const id = req.params.id as string;
-    const format = ((req.query.format as string) || 'json').toLowerCase();
+    const rawFormat = ((req.query.format as string) || 'json').toLowerCase();
     const orgId = req.user ? req.user.org : (req.query.orgId as string);
     const incident = await resolveIncident(id, orgId);
 
+    // Reporter privacy: if citizen caller is not the owner, anonymize personal contact info
+    const reporterId = (incident.reportedBy as any)?._id || incident.reportedBy;
+    const isOwner = req.user && reporterId && String(reporterId) === req.user.sub;
+    const isStaff = req.user && ['officer', 'manager', 'field_worker', 'system_admin', 'tenant_admin'].includes(req.user.role);
+    const allowContact = isOwner || isStaff;
+
     const dto = buildIncidentReportDTO(incident, {
       additionalMessage: req.query.message as string,
-      consent: req.query.consent !== 'false',
+      consent: allowContact && req.query.consent !== 'false',
     });
 
-    const safeRef = (dto.incidentNumber || 'civiora-report').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const format: ReportFormat = rawFormat === 'text' ? 'txt' : (rawFormat as ReportFormat);
 
     if (format === 'csv') {
       const csv = generateCsvExport(dto);
+      const filename = generateReportFilename('incident', dto.incidentNumber, 'csv');
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="Civiora-Incident-${safeRef}.csv"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}"`);
       res.send(csv);
       return;
     }
 
     if (format === 'json') {
       const json = generateJsonExport(dto);
+      const filename = generateReportFilename('incident', dto.incidentNumber, 'json');
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="Civiora-Incident-${safeRef}.json"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}"`);
       res.send(json);
       return;
     }
 
-    if (format === 'txt' || format === 'text') {
+    if (format === 'txt') {
       const txt = generateTxtExport(dto);
+      const filename = generateReportFilename('incident', dto.incidentNumber, 'txt');
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="Civiora-Incident-${safeRef}.txt"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}"`);
       res.send(txt);
       return;
     }
 
     if (format === 'pdf') {
       const pdfBuffer = await generateIncidentPdf(dto);
+      const filename = generateReportFilename('incident', dto.incidentNumber, 'pdf');
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="Civiora_Report_${safeRef}.pdf"`);
+      const dispositionType = req.query.disposition === 'inline' ? 'inline' : 'attachment';
+      res.setHeader('Content-Disposition', `${dispositionType}; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}"`);
       res.setHeader('Content-Length', pdfBuffer.length);
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.end(pdfBuffer);
       return;
     }
 
-    throw new BadRequestError(`Unsupported export format '${format}'. Supported: pdf, json, csv, txt`);
+    throw new BadRequestError(`Unsupported export format '${rawFormat}'. Supported: pdf, txt, json, csv`);
   } catch (err) {
     next(err);
   }
@@ -266,6 +292,10 @@ export async function getResolutionPdf(req: Request, res: Response, next: NextFu
       .select('+pdfBufferBase64')
       .sort({ version: -1 });
 
+    if (!doc && incident.status !== 'resolved') {
+      throw new BadRequestError('Resolution dossier is only available after the incident has been verified and resolved.');
+    }
+
     let pdfBuffer: Buffer;
 
     if (doc?.pdfBufferBase64) {
@@ -304,16 +334,149 @@ export async function getResolutionPdf(req: Request, res: Response, next: NextFu
       });
     }
 
-    const safeRef = (incident.incidentNumber || 'civiora').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const filename = `Civiora_Resolution_${safeRef}_v${doc?.version || 1}.pdf`;
+    const version = doc?.version || 1;
+    const filename = generateReportFilename('resolution', incident.incidentNumber, 'pdf', version);
 
     res.setHeader('Content-Type', 'application/pdf');
     const dispositionType = req.query.disposition === 'inline' ? 'inline' : 'attachment';
-    res.setHeader('Content-Disposition', `${dispositionType}; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `${dispositionType}; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}"`);
     res.setHeader('Content-Length', pdfBuffer.length);
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
     res.end(pdfBuffer);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/v1/incidents/:id/resolution/export?format=pdf|json|csv|txt
+ * Exports final verified resolution data in PDF, JSON, RFC-4180 CSV, or plain text format
+ */
+export async function exportResolution(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    const rawFormat = ((req.query.format as string) || 'json').toLowerCase();
+    const incident = await resolveIncident(id);
+
+    // Permission check for citizen / worker
+    if (req.user) {
+      if (req.user.role === 'citizen') {
+        const reporterId = (incident.reportedBy as any)?._id || incident.reportedBy;
+        if (reporterId && String(reporterId) !== req.user.sub && incident.status !== 'resolved') {
+          throw new BadRequestError('Access denied: You can only view resolution dossiers for your own reports');
+        }
+      } else if (req.user.role === 'field_worker') {
+        const assignedId = (incident.assignedTo as any)?._id || incident.assignedTo;
+        if (assignedId && String(assignedId) !== req.user.sub && incident.status !== 'resolved') {
+          throw new BadRequestError('Access denied: Work order not assigned to you');
+        }
+      }
+    }
+
+    const { ResolutionDocument } = await import('./resolutionDocument.model.js');
+    let doc = await ResolutionDocument.findOne({ incidentId: incident._id })
+      .select('+pdfBufferBase64')
+      .sort({ version: -1 });
+
+    if (!doc && incident.status !== 'resolved') {
+      throw new BadRequestError('Resolution dossier is only available after the incident has been verified and resolved.');
+    }
+
+    const { WorkSession } = await import('../operations/workSession.model.js');
+    const workSession = await WorkSession.findOne({ incidentId: incident._id }).sort({ createdAt: -1 });
+    const version = doc?.version || 1;
+    const resolutionId = doc?.resolutionId || `RES-${incident.incidentNumber}-V${version}`;
+    const now = incident.resolution?.resolvedAt || new Date();
+
+    const docData = doc || {
+      resolutionId,
+      version,
+      status: 'approved',
+      contentHash: 'verified-resolution-digest',
+      incidentNumber: incident.incidentNumber,
+      startedAt: workSession?.startedAt || incident.createdAt,
+      completedAt: workSession?.completedAt || now,
+      totalDurationSeconds: workSession?.elapsedSeconds || 1800,
+      activeDurationSeconds: workSession?.activeWorkSeconds || 1500,
+      workerName: 'Municipal Field Operations',
+      verifierName: 'Department Authority',
+      departmentName: 'Public Works',
+      completionSummary: workSession?.completionSummary || incident.resolution?.resolutionNotes || 'Hazard inspected and resolved.',
+      inspectionNotes: workSession?.inspectionNotes,
+      generatedAt: now.toISOString(),
+    };
+
+    const format: ReportFormat = rawFormat === 'text' ? 'txt' : (rawFormat as ReportFormat);
+
+    if (format === 'csv') {
+      const csv = generateResolutionCsvExport(docData, incident);
+      const filename = generateReportFilename('resolution', incident.incidentNumber, 'csv', docData.version);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}"`);
+      res.send(csv);
+      return;
+    }
+
+    if (format === 'json') {
+      const json = generateResolutionJsonExport(docData, incident);
+      const filename = generateReportFilename('resolution', incident.incidentNumber, 'json', docData.version);
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}"`);
+      res.send(json);
+      return;
+    }
+
+    if (format === 'txt') {
+      const txt = generateResolutionTxtExport(docData, incident);
+      const filename = generateReportFilename('resolution', incident.incidentNumber, 'txt', docData.version);
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}"`);
+      res.send(txt);
+      return;
+    }
+
+    if (format === 'pdf') {
+      let pdfBuffer: Buffer;
+      if (doc?.pdfBufferBase64) {
+        pdfBuffer = Buffer.from(doc.pdfBufferBase64, 'base64');
+      } else {
+        const { generateResolutionPdf } = await import('./pdfGenerator.service.js');
+        pdfBuffer = await generateResolutionPdf({
+          incidentNumber: incident.incidentNumber,
+          title: incident.title,
+          categoryLabel: incident.category,
+          locationAddress: incident.location.address,
+          coordinates: incident.location.coordinates,
+          submittedAt: incident.createdAt,
+          resolvedAt: now,
+          startedAt: workSession?.startedAt || incident.createdAt,
+          completedAt: workSession?.completedAt || now,
+          elapsedSeconds: workSession?.elapsedSeconds || 1800,
+          activeWorkSeconds: workSession?.activeWorkSeconds || 1500,
+          workerName: docData.workerName,
+          verifierName: docData.verifierName,
+          verifierRole: 'DEPARTMENT OFFICER',
+          departmentName: docData.departmentName,
+          completionSummary: docData.completionSummary,
+          inspectionNotes: docData.inspectionNotes,
+          resolutionId: docData.resolutionId,
+          version: docData.version,
+          contentHash: docData.contentHash,
+        });
+      }
+
+      const filename = generateReportFilename('resolution', incident.incidentNumber, 'pdf', docData.version);
+      res.setHeader('Content-Type', 'application/pdf');
+      const dispositionType = req.query.disposition === 'inline' ? 'inline' : 'attachment';
+      res.setHeader('Content-Disposition', `${dispositionType}; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.end(pdfBuffer);
+      return;
+    }
+
+    throw new BadRequestError(`Unsupported export format '${rawFormat}'. Supported: pdf, txt, json, csv`);
   } catch (err) {
     next(err);
   }

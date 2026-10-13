@@ -24,6 +24,7 @@ router.get('/metrics', optionalAuthenticate, incidentController.metrics);
 router.get('/:id/report.pdf', optionalAuthenticate, reportController.getReportPdf);
 router.post('/:id/report/pdf', optionalAuthenticate, reportController.getReportPdf);
 router.get('/:id/resolution.pdf', optionalAuthenticate, reportController.getResolutionPdf);
+router.get('/:id/resolution/export', optionalAuthenticate, reportController.exportResolution);
 router.get('/:id/resolution', optionalAuthenticate, reportController.getResolutionDocument);
 router.get('/:id/report/export', optionalAuthenticate, reportController.exportReport);
 router.get('/:id/export', optionalAuthenticate, reportController.exportReport);

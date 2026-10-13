@@ -23,7 +23,9 @@ import {
   INCIDENT_CATEGORY_LABELS,
   type IncidentCategory,
   type AIAnalysis,
+  type ReportFormat,
 } from '@civicpulse/shared';
+import { downloadReportFile } from '../../utils/downloadReport';
 
 type WizardStep = 'capture' | 'ai_scan' | 'details' | 'success';
 
@@ -547,61 +549,35 @@ export const ReportIncidentPage: React.FC = () => {
     }
   };
 
-  const downloadBlobFile = async (
-    endpoint: string,
-    filename: string,
-    mimeType: string,
-    format: 'pdf' | 'json' | 'csv' | 'txt'
-  ) => {
+  const handleDownloadFormat = async (format: ReportFormat) => {
+    const targetId = createdIncident?.incidentNumber || createdIncident?._id || createdIncident?.id;
+    if (!targetId || downloadingFormat) return;
     setDownloadingFormat(format);
     try {
-      const res = await api.get(endpoint, { responseType: 'blob' });
-      const blob = new Blob([res.data], { type: mimeType });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        a.remove();
-        window.URL.revokeObjectURL(url);
-      }, 300);
+      await downloadReportFile({
+        kind: 'incident',
+        incidentIdOrNumber: targetId,
+        format,
+        reporterOverrides: {
+          name: reporterName,
+          email: reporterEmail,
+          phone: reporterPhone,
+          additionalMessage: additionalMessage,
+          consent: consentToShareContact,
+        },
+      });
     } catch (err: any) {
       console.error('Download error:', err);
-      alert(`Could not download ${filename}. ${err.response?.data?.error?.message || err.message || 'Check connection.'}`);
+      alert(err.message || 'File download failed. Check connection.');
     } finally {
       setDownloadingFormat(null);
     }
   };
 
-  const handleDownloadPdf = async () => {
-    const targetId = createdIncident?.incidentNumber || createdIncident?._id || createdIncident?.id;
-    if (!targetId || downloadingFormat) return;
-    const ref = createdIncident?.incidentNumber || targetId;
-    await downloadBlobFile(`/incidents/${targetId}/report.pdf`, `Civiora_Report_${ref}.pdf`, 'application/pdf', 'pdf');
-  };
-
-  const handleExportJson = async () => {
-    const targetId = createdIncident?.incidentNumber || createdIncident?._id || createdIncident?.id;
-    if (!targetId || downloadingFormat) return;
-    const ref = createdIncident?.incidentNumber || targetId;
-    await downloadBlobFile(`/incidents/${targetId}/report/export?format=json`, `Civiora-Incident-${ref}.json`, 'application/json', 'json');
-  };
-
-  const handleExportCsv = async () => {
-    const targetId = createdIncident?.incidentNumber || createdIncident?._id || createdIncident?.id;
-    if (!targetId || downloadingFormat) return;
-    const ref = createdIncident?.incidentNumber || targetId;
-    await downloadBlobFile(`/incidents/${targetId}/report/export?format=csv`, `Civiora-Incident-${ref}.csv`, 'text/csv', 'csv');
-  };
-
-  const handleExportTxt = async () => {
-    const targetId = createdIncident?.incidentNumber || createdIncident?._id || createdIncident?.id;
-    if (!targetId || downloadingFormat) return;
-    const ref = createdIncident?.incidentNumber || targetId;
-    await downloadBlobFile(`/incidents/${targetId}/report/export?format=txt`, `Civiora-Incident-${ref}.txt`, 'text/plain', 'txt');
-  };
+  const handleDownloadPdf = () => handleDownloadFormat('pdf');
+  const handleExportJson = () => handleDownloadFormat('json');
+  const handleExportCsv = () => handleDownloadFormat('csv');
+  const handleExportTxt = () => handleDownloadFormat('txt');
 
   const handlePrintReport = () => {
     window.print();
