@@ -28,7 +28,7 @@
     "docker:up": "docker compose -f docker/docker-compose.yml up -d",
     "docker:down": "docker compose -f docker/docker-compose.yml down",
     "docker:logs": "docker compose -f docker/docker-compose.yml logs -f",
-    "prepare": "husky"
+    "prepare": "node -e \"if (!process.env.RENDER && !process.env.CI && process.env.NODE_ENV !== 'production') { try { require('child_process').execSync('npx husky', { stdio: 'inherit' }); } catch (e) {} }\""
   },
   "devDependencies": {
     "concurrently": "^10.0.6",
