@@ -134,8 +134,8 @@ export async function getIncidentsInBounds(req: Request, res: Response, next: Ne
 
     // Support comma-separated bounds: sw_lng,sw_lat,ne_lng,ne_lat
     if (req.query.bounds && typeof req.query.bounds === 'string') {
-      const parts = req.query.bounds.split(',').map((p) => parseFloat(p.trim()));
-      if (parts.length === 4 && parts.every((p) => !isNaN(p))) {
+      const parts = req.query.bounds.split(',').map((p: string) => parseFloat(p.trim()));
+      if (parts.length === 4 && parts.every((p: number) => !isNaN(p))) {
         const [b0, b1, b2, b3] = parts;
         if (b0 !== undefined && b1 !== undefined && b2 !== undefined && b3 !== undefined) {
           sw_lng = b0;

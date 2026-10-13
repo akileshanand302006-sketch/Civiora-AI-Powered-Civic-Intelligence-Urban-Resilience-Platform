@@ -3,7 +3,7 @@
 // Fast, Type-Safe Endpoints for Multimodal AI Services
 // ============================================================
 
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { aiController } from './ai.controller.js';
 
@@ -15,7 +15,7 @@ const upload = multer({
   limits: {
     fileSize: 15 * 1024 * 1024, // 15MB max file size
   },
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (_req: any, file: any, cb: any) => {
     const allowedMime = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
     if (allowedMime.includes(file.mimetype.toLowerCase())) {
       cb(null, true);
@@ -29,7 +29,7 @@ const upload = multer({
  * GET /api/v1/ai/models
  * Public/Authenticated endpoint for model readiness and storage budget report.
  */
-router.get('/models', (req, res) => aiController.getModelsStatus(req, res));
+router.get('/models', (req: Request, res: Response) => aiController.getModelsStatus(req, res));
 
 /**
  * POST /api/v1/ai/analyze-image
@@ -39,7 +39,7 @@ router.get('/models', (req, res) => aiController.getModelsStatus(req, res));
 router.post(
   '/analyze-image',
   upload.single('file'),
-  (req, res) => aiController.analyzeImage(req, res)
+  (req: Request, res: Response) => aiController.analyzeImage(req, res)
 );
 
 /**
@@ -48,7 +48,7 @@ router.post(
  */
 router.post(
   '/find-similar-incidents',
-  (req, res) => aiController.findSimilarIncidents(req, res)
+  (req: Request, res: Response) => aiController.findSimilarIncidents(req, res)
 );
 
 export default router;

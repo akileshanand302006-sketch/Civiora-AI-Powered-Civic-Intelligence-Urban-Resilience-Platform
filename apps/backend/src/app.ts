@@ -2,7 +2,7 @@
 // Express Application Setup
 // ============================================================
 
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -110,13 +110,13 @@ app.use('/api/inngest', inngestHandler);
 app.use(`${apiPrefix}/inngest`, inngestHandler);
 
 // ── 404 Handler ───────────────────────────────────────────
-app.use((_req, res) => {
+app.use((req: Request, res: Response) => {
   res.status(404).json({
     success: false,
     error: {
       code: 'ROUTE_NOT_FOUND',
       message: 'The requested endpoint does not exist',
-      requestId: (_req as express.Request).requestId || 'unknown',
+      requestId: (req as any).requestId || 'unknown',
     },
   });
 });

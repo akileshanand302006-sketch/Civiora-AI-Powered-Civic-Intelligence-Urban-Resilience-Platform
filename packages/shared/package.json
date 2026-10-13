@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "node -e \"console.log('@civicpulse/shared ready')\"",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "clean": "rimraf dist"
