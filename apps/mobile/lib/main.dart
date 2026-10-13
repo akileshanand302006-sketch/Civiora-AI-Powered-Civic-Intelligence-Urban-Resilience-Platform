@@ -2,6 +2,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:geolocator/geolocator.dart';
+
+
 
 import 'design_system/tokens/colors.dart';
 import 'design_system/components/glass_container.dart';
@@ -55,15 +58,15 @@ class _SpatialHomeScreenState extends State<SpatialHomeScreen> {
 
   final List<Map<String, dynamic>> _savedLocations = [
     {
-      'name': 'Home',
-      'icon': Icons.home_rounded,
-      'address': 'DB Road, RS Puram, Coimbatore',
-      'city': 'Coimbatore',
-      'lat': 11.0088,
-      'lng': 76.9497,
+      'name': 'Chennai Secretariat',
+      'icon': Icons.location_city_rounded,
+      'address': 'Fort St. George, Rajaji Salai, Chennai',
+      'city': 'Chennai',
+      'lat': 13.0827,
+      'lng': 80.2707,
     },
     {
-      'name': 'College (CIT)',
+      'name': 'Coimbatore (CIT Campus)',
       'icon': Icons.school_rounded,
       'address': 'Avinashi Rd, Peelamedu, Coimbatore',
       'city': 'Coimbatore',
@@ -71,14 +74,136 @@ class _SpatialHomeScreenState extends State<SpatialHomeScreen> {
       'lng': 77.0279,
     },
     {
-      'name': 'Work (Tidel Park)',
-      'icon': Icons.work_rounded,
-      'address': 'ELCOT SEZ, Civil Aerodrome Post, Coimbatore',
-      'city': 'Coimbatore',
-      'lat': 11.0371,
-      'lng': 77.0428,
+      'name': 'Madurai Central',
+      'icon': Icons.temple_hindu_rounded,
+      'address': 'Meenakshi Temple Zone, Madurai',
+      'city': 'Madurai',
+      'lat': 9.9252,
+      'lng': 78.1198,
+    },
+    {
+      'name': 'Tiruchirappalli Junction',
+      'icon': Icons.hub_rounded,
+      'address': 'Central Civic Zone, Tiruchirappalli',
+      'city': 'Tiruchirappalli',
+      'lat': 10.7905,
+      'lng': 78.7047,
+    },
+    {
+      'name': 'Salem Smart Hub',
+      'icon': Icons.business_rounded,
+      'address': 'Fort Main Road, Hasthampatti, Salem',
+      'city': 'Salem',
+      'lat': 11.6643,
+      'lng': 78.146,
+    },
+    {
+      'name': 'The Nilgiris (Ooty)',
+      'icon': Icons.landscape_rounded,
+      'address': 'Charing Cross, Udhagamandalam',
+      'city': 'The Nilgiris',
+      'lat': 11.4102,
+      'lng': 76.7032,
+    },
+    {
+      'name': 'Kanniyakumari Unit',
+      'icon': Icons.water_rounded,
+      'address': 'Beach Road, Cape Comorin',
+      'city': 'Kanniyakumari',
+      'lat': 8.0883,
+      'lng': 77.5385,
     },
   ];
+
+  Future<void> _acquireRealDeviceLocation() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: CivicPulseColors.glassStrong,
+          content: const Text('Device GPS services are disabled. Please enable GPS in device settings.'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      );
+      return;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: CivicPulseColors.glassStrong,
+            content: const Text('Location permission denied. Please select your Tamil Nadu district manually.'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        );
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: CivicPulseColors.glassStrong,
+          content: const Text('Location permissions permanently denied. Please allow in app settings.'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 12),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _selectedLat = position.latitude;
+        _selectedLng = position.longitude;
+        _selectedName = 'Device GPS Fix';
+        _selectedAddress = 'Tamil Nadu GPS (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})';
+        _selectedCity = 'Tamil Nadu';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: CivicPulseColors.glassStrong,
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: CivicPulseColors.accentSuccess),
+              const SizedBox(width: 10),
+              Text('GPS Locked: ±${position.accuracy.round()}m precision'),
+            ],
+          ),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: CivicPulseColors.glassStrong,
+          content: Text('Failed to acquire device GPS: $e'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      );
+    }
+  }
 
   void _requestLocationPermission() {
     showDialog(
@@ -99,7 +224,7 @@ class _SpatialHomeScreenState extends State<SpatialHomeScreen> {
             ],
           ),
           content: const Text(
-            'CivicPulse uses your precise GPS location to detect nearby civic hazards, visualize local infrastructure stress, and direct field response teams in real time.',
+            'Civiora uses your precise device GPS location to detect nearby civic hazards and synchronize field emergency dispatch across all 38 districts of Tamil Nadu.',
             style: TextStyle(fontSize: 13, color: CivicPulseColors.textSecondary, height: 1.4),
           ),
           actions: [
@@ -110,39 +235,20 @@ class _SpatialHomeScreenState extends State<SpatialHomeScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(ctx);
-                setState(() {
-                  _selectedCity = 'Coimbatore';
-                  _selectedName = 'Current GPS Position';
-                  _selectedAddress = 'Peelamedu, Coimbatore (~8m GPS Accuracy)';
-                  _selectedLat = 11.0295;
-                  _selectedLng = 77.0282;
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: CivicPulseColors.glassStrong,
-                    content: const Row(
-                      children: [
-                        Icon(Icons.check_circle_rounded, color: CivicPulseColors.accentSuccess),
-                        SizedBox(width: 10),
-                        Text('GPS Location synchronized (~8m precision)'),
-                      ],
-                    ),
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                );
+                _acquireRealDeviceLocation();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: CivicPulseColors.accentPrimary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Allow Location'),
+              child: const Text('Acquire GPS Fix'),
             ),
           ],
         ),
       ),
     );
   }
+
 
   void _showLocationSelectorModal(BuildContext context) {
     showModalBottomSheet(

@@ -134,7 +134,8 @@ export async function updateRole(req: Request, res: Response, next: NextFunction
 
 export async function updateActiveLocation(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { latitude, longitude, formattedAddress, city, state } = req.body;
+    const payload = req.body?.location || req.body || {};
+    const { latitude, longitude, formattedAddress, city, state, district, districtId } = payload;
 
     if (typeof latitude !== 'number' || typeof longitude !== 'number') {
       throw new BadRequestError('Valid latitude and longitude numbers are required');
@@ -156,8 +157,10 @@ export async function updateActiveLocation(req: Request, res: Response, next: Ne
             type: 'Point',
             coordinates: [longitude, latitude], // Canonical GeoJSON [lng, lat]
             formattedAddress: formattedAddress || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-            city,
-            state,
+            city: city || 'Tamil Nadu',
+            state: state || 'Tamil Nadu',
+            district: district || undefined,
+            districtId: districtId || undefined,
             selectedAt: new Date(),
           },
         },

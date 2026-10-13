@@ -1,0 +1,79 @@
+# ============================================================
+# Civiora — Render Blueprint Infrastructure as Code
+# Deploys:
+#   1. civiora-api  — Node.js / Express Core Geospatial & Realtime API
+#   2. civiora-ai   — Python / FastAPI YOLO11 & Multimodal Inference Engine
+# ============================================================
+
+services:
+  # ── 1. Backend Core API (Node.js + Express + Socket.IO) ──
+  - type: web
+    name: civiora-api
+    runtime: node
+    plan: starter
+    region: singapore
+    buildCommand: npm install && npm run build --workspace=packages/shared && npm run build --workspace=apps/backend
+    startCommand: npm start --workspace=apps/backend
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: APP_NAME
+        value: Civiora
+      - key: APP_URL
+        value: https://civiora.vercel.app
+      - key: WS_CORS_ORIGIN
+        value: https://civiora.vercel.app,http://localhost:5173
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_MFA_SECRET
+        generateValue: true
+      - key: AI_SERVICE_URL
+        value: http://civiora-ai:8000
+      - key: AI_SERVICE_KEY
+        generateValue: true
+      - key: LOG_LEVEL
+        value: info
+      - key: LOG_FORMAT
+        value: json
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        value: reports@civiora.gov
+      - key: MUNICIPAL_RECEIVER_EMAIL
+        value: akileshanand302006@gmail.com
+      - key: EMAIL_DELIVERY_ENABLED
+        value: "true"
+      - key: FRONTEND_URL
+        value: https://civiora.vercel.app
+
+  # ── 2. AI Intelligence Engine (Python 3.11+ / FastAPI) ──
+  - type: web
+    name: civiora-ai
+    runtime: python
+    plan: starter
+    region: singapore
+    rootDir: apps/ai-service
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PORT
+        value: 8000
+      - key: CORS_ORIGINS
+        value: https://civiora.vercel.app,http://localhost:5173
+      - key: AI_API_KEY
+        fromService:
+          type: web
+          name: civiora-api
+          envVarKey: AI_SERVICE_KEY

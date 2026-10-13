@@ -1,0 +1,132 @@
+{
+  "audit_summary": {
+    "hard_budget_gb": 40.0,
+    "candidate_count": 5,
+    "eligible_count": 5,
+    "total_candidate_mb": 1245.0
+  },
+  "candidates": [
+    {
+      "id": "rdd2022-subset",
+      "name": "Road Damage Dataset 2022 (RDD2022)",
+      "source": "https://bigdata.cps.ibaraki.ac.jp/road_damage_dataset/",
+      "license": "CC-BY-SA-4.0",
+      "commercial_use_allowed": true,
+      "format": "VOC XML / YOLO",
+      "raw_categories": [
+        "D00",
+        "D10",
+        "D20",
+        "D40",
+        "Repair"
+      ],
+      "civiora_mapping": {
+        "D00": "road_crack",
+        "D10": "road_crack",
+        "D20": "road_crack",
+        "D40": "pothole",
+        "Repair": "road_surface_damage"
+      },
+      "estimated_size_mb": 450.0,
+      "sample_count": 2500,
+      "suitability": "High - standard benchmark for municipal road surface distress",
+      "required_attribution": "Crowdsensing-based Road Damage Detection Challenge 2022"
+    },
+    {
+      "id": "roboflow-pothole",
+      "name": "Public Pothole Detection (Roboflow Universe)",
+      "source": "https://universe.roboflow.com/annotated-potholes/potholes",
+      "license": "CC-BY-4.0",
+      "commercial_use_allowed": true,
+      "format": "YOLOv8/11 format",
+      "raw_categories": [
+        "pothole"
+      ],
+      "civiora_mapping": {
+        "pothole": "pothole"
+      },
+      "estimated_size_mb": 85.0,
+      "sample_count": 665,
+      "suitability": "High - verified bounding boxes specifically for asphalt potholes",
+      "required_attribution": "Roboflow Universe Community / CC-BY-4.0"
+    },
+    {
+      "id": "taco-trash-subset",
+      "name": "TACO: Trash Annotations in Context (Subset)",
+      "source": "http://tacodataset.org/",
+      "license": "CC-BY-4.0",
+      "commercial_use_allowed": true,
+      "format": "COCO JSON",
+      "raw_categories": [
+        "Plastics",
+        "Bottles",
+        "Trash can",
+        "Litter pile",
+        "Unlabeled litter"
+      ],
+      "civiora_mapping": {
+        "Plastics": "garbage",
+        "Bottles": "garbage",
+        "Litter pile": "garbage",
+        "Unlabeled litter": "illegal_dumping"
+      },
+      "estimated_size_mb": 240.0,
+      "sample_count": 1500,
+      "suitability": "High - open-waste and roadside litter identification",
+      "required_attribution": "Pedro F. Proen\u00e7a and Pedro Sim\u00f5es, TACO Dataset"
+    },
+    {
+      "id": "floodnet-civic-subset",
+      "name": "FloodNet: High-Resolution Urban Flood Dataset (Subset)",
+      "source": "https://github.com/BinaLab/FloodNet-Challenge-EARTHVISION2021",
+      "license": "CC-BY-4.0",
+      "commercial_use_allowed": true,
+      "format": "Segmentation Mask & Bounding Boxes",
+      "raw_categories": [
+        "Flooded_Road",
+        "Non_Flooded_Road",
+        "Water_Accumulation"
+      ],
+      "civiora_mapping": {
+        "Flooded_Road": "flooding",
+        "Water_Accumulation": "waterlogging"
+      },
+      "estimated_size_mb": 350.0,
+      "sample_count": 1200,
+      "suitability": "High - monsoon waterlogging and flood hazard segmentation",
+      "required_attribution": "R. Rahnamayan et al., FloodNet Challenge"
+    },
+    {
+      "id": "civiora-tn-hazards-eval",
+      "name": "Civiora Tamil Nadu Urban Hazards Evaluation Suite",
+      "source": "Internal Curated Benchmarks across 38 Districts",
+      "license": "CC-BY-4.0",
+      "commercial_use_allowed": true,
+      "format": "Unified Civiora Multimodal (YOLO, OCR, Seg, Qwen captions)",
+      "raw_categories": [
+        "pothole",
+        "road_crack",
+        "garbage",
+        "flooding",
+        "fallen_tree",
+        "damaged_streetlight",
+        "damaged_traffic_sign",
+        "drainage_obstruction"
+      ],
+      "civiora_mapping": {
+        "pothole": "pothole",
+        "road_crack": "road_crack",
+        "garbage": "garbage",
+        "flooding": "flooding",
+        "fallen_tree": "fallen_tree",
+        "damaged_streetlight": "damaged_streetlight",
+        "damaged_traffic_sign": "damaged_traffic_sign",
+        "drainage_obstruction": "drainage_obstruction"
+      },
+      "estimated_size_mb": 120.0,
+      "sample_count": 800,
+      "suitability": "Maximum - covers all 8 canonical Civiora classes and 38 TN districts",
+      "required_attribution": "Civiora Civic Intelligence Project"
+    }
+  ]
+}

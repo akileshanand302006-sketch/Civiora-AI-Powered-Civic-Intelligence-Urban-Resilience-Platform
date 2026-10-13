@@ -1,0 +1,4 @@
+C:\My Projects\Civic\apps\ai-service\datasets\eval_samples\images\fallen_tree_01.jpg
+C:\My Projects\Civic\apps\ai-service\datasets\eval_samples\images\flooding_01.jpg
+C:\My Projects\Civic\apps\ai-service\datasets\eval_samples\images\pothole_01.jpg
+C:\My Projects\Civic\apps\ai-service\datasets\eval_samples\images\road_crack_01.jpg

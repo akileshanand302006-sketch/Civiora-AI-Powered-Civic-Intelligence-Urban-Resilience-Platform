@@ -11,7 +11,9 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "turbo run dev",
+    "dev": "node scripts/dev.js",
+    "dev:all": "concurrently -k -p \"[{name}]\" -n \"ai,dev\" -c \"yellow,cyan\" \"npm run dev:ai\" \"npm run dev\"",
+    "dev:turbo": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
@@ -29,6 +31,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "concurrently": "^10.0.6",
     "husky": "^9.1.0",
     "lint-staged": "^15.2.0",
     "turbo": "^2.1.0"

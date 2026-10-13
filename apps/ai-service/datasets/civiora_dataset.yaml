@@ -1,0 +1,15 @@
+# Civiora Civic Intelligence - Multi-Hazard Dataset Configuration
+path: C:/My Projects/Civic/apps/ai-service/datasets
+train: splits/train.txt
+val: splits/val.txt
+test: splits/test.txt
+
+names:
+  0: pothole
+  1: road_crack
+  2: garbage
+  3: flooding
+  4: fallen_tree
+  5: damaged_streetlight
+  6: damaged_traffic_sign
+  7: drainage_obstruction

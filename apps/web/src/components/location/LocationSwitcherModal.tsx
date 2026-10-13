@@ -1,6 +1,7 @@
 // ============================================================
 // CivicPulse Floating Glass Location Switcher Modal
-// Quick Area Switcher + Saved Places + Map Setup Launcher
+// Quick Area Switcher + Accurate GPS Detection + Saved Places
+// Precision-Aware Location Confirmation + Tamil Nadu 38 Districts
 // ============================================================
 
 import React, { useState } from 'react';
@@ -8,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLocationStore, type CivicLocation } from '../../stores/locationStore';
 import { getCurrentBrowserPosition, reverseGeocode } from '../../services/googleMapsService';
 import { GlassSurface, GlassButton } from '../../design-system/components';
+import { api } from '../../services/api';
 
 export const LocationSwitcherModal: React.FC = () => {
   const {
@@ -22,28 +24,76 @@ export const LocationSwitcherModal: React.FC = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [isLocating, setIsLocating] = useState(false);
+  const [detectedCandidate, setDetectedCandidate] = useState<CivicLocation | null>(null);
+  const [detectionError, setDetectionError] = useState<string | null>(null);
+  const [detectionStage, setDetectionStage] = useState<
+    'idle' | 'acquiring' | 'resolving' | 'detected' | 'error'
+  >('idle');
 
   if (!isLocationModalOpen) return null;
 
-  const handleSelect = (loc: CivicLocation) => {
+  const handleSelect = async (loc: CivicLocation) => {
     setSelectedLocation(loc);
+    // Persist to backend if authenticated
+    await api
+      .put('/users/me/locations/active', {
+        location: {
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          formattedAddress: loc.formattedAddress,
+          city: loc.city,
+          state: loc.state,
+          district: loc.district,
+          districtId: loc.districtId,
+        },
+      })
+      .catch(() => {});
     closeLocationModal();
   };
 
   const handleUseCurrentGps = async () => {
     setIsLocating(true);
+    setDetectionError(null);
+    setDetectedCandidate(null);
+    setDetectionStage('acquiring');
+
     try {
+      // 1. Request fresh device geolocation with high-accuracy GNSS
       const pos = await getCurrentBrowserPosition();
+      setDetectionStage('resolving');
+
+      // 2. Structured Reverse Geocoding with Tamil Nadu district resolution
       const loc = await reverseGeocode(pos.latitude, pos.longitude);
       loc.accuracy = pos.accuracy;
+      loc.accuracyConfidence = pos.accuracyConfidence;
       loc.source = 'CURRENT_GPS';
-      setSelectedLocation(loc);
-      closeLocationModal();
+      loc.selectedAt = pos.timestamp || new Date().toISOString();
+
+      setDetectedCandidate(loc);
+      setDetectionStage('detected');
     } catch (err: any) {
-      alert(err.message || 'GPS location unavailable. Please select on map.');
+      console.warn('[Civiora] GPS acquisition note:', err);
+      const message =
+        err.userMessage ||
+        err.message ||
+        'Unable to retrieve GPS coordinates. Please check location permissions or pick on map.';
+      setDetectionError(message);
+      setDetectionStage('error');
     } finally {
       setIsLocating(false);
     }
+  };
+
+  // User confirms the detected live GPS location
+  const handleConfirmDetected = async () => {
+    if (!detectedCandidate) return;
+    await handleSelect(detectedCandidate);
+  };
+
+  const handleCancelDetected = () => {
+    setDetectedCandidate(null);
+    setDetectionError(null);
+    setDetectionStage('idle');
   };
 
   const handleOpenMapSetup = () => {
@@ -63,20 +113,27 @@ export const LocationSwitcherModal: React.FC = () => {
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(7, 10, 16, 0.72)',
+        backgroundColor: 'rgba(7, 10, 16, 0.75)',
         backdropFilter: 'blur(18px)',
         WebkitBackdropFilter: 'blur(18px)',
         zIndex: 9998,
         display: 'flex',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         justifyContent: 'center',
-        paddingTop: '12vh',
+        padding: '0.75rem',
+        overflowY: 'auto',
         animation: 'fadeIn 0.2s ease-out',
       }}
       onClick={closeLocationModal}
     >
       <div
-        style={{ width: '100%', maxWidth: '520px', margin: '0 1rem' }}
+        style={{
+          width: '100%',
+          maxWidth: '520px',
+          maxHeight: 'min(90vh, 720px)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <GlassSurface
@@ -86,12 +143,15 @@ export const LocationSwitcherModal: React.FC = () => {
           style={{
             borderRadius: '24px',
             overflow: 'hidden',
+            maxHeight: 'min(90vh, 720px)',
+            display: 'flex',
+            flexDirection: 'column',
             boxShadow: '0 30px 80px rgba(0, 0, 0, 0.7), 0 0 50px rgba(10, 132, 255, 0.25)',
           }}
         >
           {/* Header */}
           <div
-            className="d-flex justify-content-between align-items-center p-3 px-4 border-bottom"
+            className="d-flex justify-content-between align-items-center p-3 px-4 border-bottom flex-shrink-0"
             style={{ borderColor: 'var(--cp-glass-border)' }}
           >
             <div className="d-flex align-items-center gap-2">
@@ -104,7 +164,7 @@ export const LocationSwitcherModal: React.FC = () => {
             />
           </div>
 
-          <div className="p-4">
+          <div className="p-3 p-sm-4" style={{ overflowY: 'auto' }}>
             {/* Active Area Banner */}
             {selectedLocation && (
               <div
@@ -147,15 +207,16 @@ export const LocationSwitcherModal: React.FC = () => {
               />
             </div>
 
-            {/* Quick GPS Action */}
+            {/* Quick GPS Action Button */}
             <button
               onClick={handleUseCurrentGps}
               disabled={isLocating}
-              className="btn btn-sm w-100 p-2 mb-3 rounded-3 d-flex align-items-center justify-content-center gap-2"
+              className="btn btn-sm w-100 p-2 mb-2 rounded-3 d-flex align-items-center justify-content-center gap-2"
               style={{
                 background: 'rgba(255, 255, 255, 0.05)',
                 border: '1px solid var(--cp-glass-border)',
                 color: '#64D2FF',
+                transition: 'all 0.2s ease',
               }}
             >
               {isLocating ? (
@@ -163,8 +224,153 @@ export const LocationSwitcherModal: React.FC = () => {
               ) : (
                 <i className="bi bi-crosshair fs-6" />
               )}
-              <span className="fw-semibold">Detect My Current GPS Location</span>
+              <span className="fw-semibold">
+                {detectionStage === 'acquiring'
+                  ? 'Acquiring GPS fix (satellite GNSS)...'
+                  : detectionStage === 'resolving'
+                  ? 'Resolving municipal district...'
+                  : 'Detect My Current GPS Location'}
+              </span>
             </button>
+
+            {/* ── ACCURACY & CONFIRMATION PREVIEW CARD ───────────── */}
+            {detectedCandidate && (
+              <div
+                className="p-3 rounded-3 mb-3 border animate-fadeIn"
+                style={{
+                  background: 'rgba(16, 33, 58, 0.75)',
+                  borderColor:
+                    detectedCandidate.accuracyConfidence === 'high'
+                      ? 'rgba(48, 209, 88, 0.4)'
+                      : 'rgba(159, 201, 255, 0.35)',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                }}
+              >
+                <div className="d-flex align-items-center justify-content-between mb-2">
+                  <span
+                    className="small fw-semibold text-uppercase font-monospace"
+                    style={{ fontSize: '0.7rem', color: '#9FC9FF' }}
+                  >
+                    <i className="bi bi-broadcast me-1" />
+                    Detected Live Position
+                  </span>
+
+                  {/* Accuracy Badge */}
+                  <span
+                    className="badge rounded-pill"
+                    style={{
+                      fontSize: '0.68rem',
+                      background:
+                        detectedCandidate.accuracyConfidence === 'high'
+                          ? 'rgba(48, 209, 88, 0.18)'
+                          : detectedCandidate.accuracyConfidence === 'approximate'
+                          ? 'rgba(255, 159, 10, 0.18)'
+                          : 'rgba(255, 69, 58, 0.18)',
+                      color:
+                        detectedCandidate.accuracyConfidence === 'high'
+                          ? '#30D158'
+                          : detectedCandidate.accuracyConfidence === 'approximate'
+                          ? '#FF9F0A'
+                          : '#FF453A',
+                      border: `1px solid ${
+                        detectedCandidate.accuracyConfidence === 'high'
+                          ? 'rgba(48, 209, 88, 0.35)'
+                          : 'rgba(255, 159, 10, 0.35)'
+                      }`,
+                    }}
+                  >
+                    ±{detectedCandidate.accuracy || 10}m •{' '}
+                    {detectedCandidate.accuracyConfidence === 'high'
+                      ? 'High Confidence (GPS)'
+                      : detectedCandidate.accuracyConfidence === 'approximate'
+                      ? 'Approximate (Wi-Fi)'
+                      : 'Low Confidence'}
+                  </span>
+                </div>
+
+                <div className="fw-bold text-white mb-1" style={{ fontSize: '0.92rem' }}>
+                  {detectedCandidate.name || detectedCandidate.city}
+                </div>
+
+                <p
+                  className="small text-secondary mb-2 text-truncate"
+                  style={{ fontSize: '0.78rem' }}
+                  title={detectedCandidate.formattedAddress}
+                >
+                  {detectedCandidate.formattedAddress}
+                </p>
+
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <span
+                    className="badge rounded-pill"
+                    style={{
+                      fontSize: '0.68rem',
+                      background: 'rgba(82, 127, 199, 0.25)',
+                      color: '#9FC9FF',
+                      border: '1px solid rgba(159, 201, 255, 0.3)',
+                    }}
+                  >
+                    {detectedCandidate.district || 'Tamil Nadu'}
+                  </span>
+                  <span className="text-secondary small" style={{ fontSize: '0.72rem' }}>
+                    Lat: {detectedCandidate.latitude.toFixed(4)}, Lng:{' '}
+                    {detectedCandidate.longitude.toFixed(4)}
+                  </span>
+                </div>
+
+                {/* Confirmation Actions */}
+                <div className="d-flex align-items-center gap-2">
+                  <button
+                    onClick={handleConfirmDetected}
+                    className="btn btn-sm btn-primary rounded-pill px-3 py-1 flex-grow-1 fw-semibold d-flex align-items-center justify-content-center gap-1.5"
+                    style={{
+                      fontSize: '0.82rem',
+                      background: 'radial-gradient(100% 100% at 50% 0%, #6392DF 0%, #375994 100%)',
+                      border: '1px solid rgba(159, 201, 255, 0.45)',
+                    }}
+                  >
+                    <i className="bi bi-check-circle-fill" />
+                    Confirm & Set as Active
+                  </button>
+                  <button
+                    onClick={handleCancelDetected}
+                    className="btn btn-sm btn-outline-secondary rounded-pill px-2.5 py-1"
+                    style={{ fontSize: '0.78rem' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Error Message & Retry */}
+            {detectionError && (
+              <div
+                className="p-3 rounded-3 mb-3 d-flex align-items-start gap-2 border"
+                style={{
+                  background: 'rgba(255, 69, 58, 0.1)',
+                  borderColor: 'rgba(255, 69, 58, 0.3)',
+                }}
+              >
+                <i className="bi bi-exclamation-triangle-fill text-danger fs-6 mt-0.5" />
+                <div className="flex-grow-1">
+                  <div className="fw-semibold text-danger small mb-1">
+                    Location Detection Error
+                  </div>
+                  <p className="small text-secondary mb-2" style={{ fontSize: '0.78rem' }}>
+                    {detectionError}
+                  </p>
+                  <button
+                    onClick={handleUseCurrentGps}
+                    className="btn btn-sm btn-outline-danger rounded-pill px-2 py-0.5"
+                    style={{ fontSize: '0.72rem' }}
+                  >
+                    <i className="bi bi-arrow-clockwise me-1" />
+                    Retry Detection
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Saved Locations List */}
             <span className="small text-secondary font-monospace d-block mb-2" style={{ fontSize: '0.75rem' }}>

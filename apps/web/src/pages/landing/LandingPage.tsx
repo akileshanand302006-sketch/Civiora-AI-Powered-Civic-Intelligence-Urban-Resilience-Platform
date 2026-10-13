@@ -224,7 +224,7 @@ export const LandingPage: React.FC = () => {
             depth="3d"
             glow
             style={{
-              height: '580px',
+              height: 'clamp(340px, 48vh, 580px)',
               borderRadius: '28px',
               position: 'relative',
               overflow: 'hidden',
@@ -240,6 +240,7 @@ export const LandingPage: React.FC = () => {
                 style={{
                   top: '1rem',
                   right: '1rem',
+                  maxWidth: 'calc(100% - 2rem)',
                   width: '300px',
                   background: 'rgba(10, 14, 23, 0.88)',
                   backdropFilter: 'blur(24px)',
@@ -294,7 +295,7 @@ export const LandingPage: React.FC = () => {
         </div>
 
         <div className="row g-4 align-items-center">
-          <div className="col-12 col-lg-8" style={{ height: '540px' }}>
+          <div className="col-12 col-lg-8" style={{ height: 'clamp(320px, 45vh, 540px)' }}>
             <UrbanRiskGlobe />
           </div>
 

@@ -5,14 +5,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useThemeStore } from '../stores/themeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useLocationStore } from '../stores/locationStore';
 import { GlassSurface } from '../design-system/components';
 
 export const PublicNavbar: React.FC = () => {
   const location = useLocation();
-  const { resolvedTheme, toggleTheme } = useThemeStore();
   const { user, isAuthenticated, logout } = useAuthStore();
   const { selectedLocation, openLocationModal, openAuthGate } = useLocationStore();
 
@@ -32,6 +30,7 @@ export const PublicNavbar: React.FC = () => {
     { label: 'Overview', to: '/', icon: 'house-door' },
     { label: 'Live City Map', to: '/live-map', icon: 'map', badge: '3D' },
     { label: 'Report Issue', to: '/report', icon: 'megaphone' },
+    { label: 'Contact', to: '/contact', icon: 'envelope' },
     { label: 'Command Center', to: '/dashboard', icon: 'speedometer2', requiresAuth: true },
   ];
 
@@ -46,7 +45,7 @@ export const PublicNavbar: React.FC = () => {
 
   return (
     <header
-      className="fixed-top px-3 py-2 d-flex justify-content-center pointer-events-none"
+      className="fixed-top px-2 px-md-3 py-2 d-flex justify-content-center pointer-events-none"
       style={{ zIndex: 1000 }}
     >
       <div
@@ -61,9 +60,9 @@ export const PublicNavbar: React.FC = () => {
           tier="ultra"
           depth="3d"
           glow
-          className="d-flex align-items-center justify-content-between px-3 px-md-4"
+          className="d-flex align-items-center justify-content-between px-2 px-sm-3 px-md-4"
           style={{
-            height: isScrolled ? '56px' : '64px',
+            height: isScrolled ? '54px' : '62px',
             borderRadius: '999px',
             boxShadow: isScrolled
               ? '0 20px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(10, 132, 255, 0.2)'
@@ -72,12 +71,12 @@ export const PublicNavbar: React.FC = () => {
           }}
         >
           {/* ── LEFT: 3D Mini Hologram Orb & Brand ─────────────── */}
-          <Link to="/" className="d-flex align-items-center gap-2 text-decoration-none">
+          <Link to="/" className="d-flex align-items-center gap-2 text-decoration-none flex-shrink-0">
             {/* Miniature Pulsating 3D Orb Glyph */}
             <div
               style={{
-                width: isScrolled ? '32px' : '36px',
-                height: isScrolled ? '32px' : '36px',
+                width: isScrolled ? '30px' : '34px',
+                height: isScrolled ? '30px' : '34px',
                 borderRadius: '50%',
                 background: 'radial-gradient(circle at 35% 35%, #9FC9FF 0%, #527FC7 60%, #050A14 100%)',
                 boxShadow: '0 0 16px rgba(159, 201, 255, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.6)',
@@ -105,7 +104,7 @@ export const PublicNavbar: React.FC = () => {
                 <span
                   className="fw-extrabold tracking-tight d-block lh-1 text-white"
                   style={{
-                    fontSize: isScrolled ? '1rem' : '1.15rem',
+                    fontSize: isScrolled ? '0.95rem' : '1.1rem',
                     letterSpacing: '-0.02em',
                   }}
                 >
@@ -178,11 +177,11 @@ export const PublicNavbar: React.FC = () => {
           </nav>
 
           {/* ── RIGHT: Location Switcher + Theme + Profile ──────── */}
-          <div className="d-flex align-items-center gap-2">
+          <div className="d-flex align-items-center gap-1 gap-sm-2 flex-shrink-0">
             {/* 📍 Active Location Capsule Switcher */}
             <button
               onClick={openLocationModal}
-              className="btn btn-sm d-flex align-items-center gap-2 rounded-pill px-3 py-1"
+              className="btn btn-sm d-flex align-items-center gap-1 gap-sm-2 rounded-pill px-2 px-sm-3 py-1"
               style={{
                 background: selectedLocation
                   ? 'rgba(82, 127, 199, 0.18)'
@@ -191,37 +190,21 @@ export const PublicNavbar: React.FC = () => {
                   selectedLocation ? 'rgba(159, 201, 255, 0.35)' : 'rgba(255, 159, 10, 0.4)'
                 }`,
                 color: selectedLocation ? '#9FC9FF' : '#FF9F0A',
-                fontSize: '0.8rem',
+                fontSize: '0.78rem',
                 fontWeight: 600,
-                maxWidth: '180px',
+                maxWidth: 'clamp(90px, 26vw, 180px)',
                 transition: 'all 0.2s ease',
               }}
               title="Click to switch active civic area or saved places"
             >
-              <i className="bi bi-geo-alt-fill" style={{ fontSize: '0.85rem' }} />
+              <i className="bi bi-geo-alt-fill flex-shrink-0" style={{ fontSize: '0.8rem' }} />
               <span className="text-truncate">{currentCity}</span>
-              <i className="bi bi-chevron-down" style={{ fontSize: '0.65rem', opacity: 0.7 }} />
-            </button>
-
-            {/* Theme Toggle Button */}
-            <button
-              onClick={toggleTheme}
-              className="btn btn-sm rounded-circle p-2 d-flex align-items-center justify-content-center"
-              style={{
-                width: '34px',
-                height: '34px',
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid var(--cp-glass-border)',
-                color: 'var(--cp-text-primary)',
-              }}
-              title={`Switch to ${resolvedTheme === 'dark' ? 'Light' : 'Dark'} mode`}
-            >
-              <i className={`bi bi-${resolvedTheme === 'dark' ? 'sun' : 'moon-stars'} fs-6`} />
+              <i className="bi bi-chevron-down flex-shrink-0 d-none d-sm-inline" style={{ fontSize: '0.65rem', opacity: 0.7 }} />
             </button>
 
             {/* User Session Profile / Sign In Capsule */}
             {isAuthenticated ? (
-              <div className="d-flex align-items-center gap-1">
+              <div className="d-flex align-items-center gap-1 flex-shrink-0">
                 <Link
                   to="/dashboard"
                   className="btn btn-sm rounded-pill px-2 py-1 d-flex align-items-center gap-2 text-decoration-none"
@@ -234,14 +217,14 @@ export const PublicNavbar: React.FC = () => {
                 >
                   <div
                     style={{
-                      width: '24px',
-                      height: '24px',
+                      width: '22px',
+                      height: '22px',
                       borderRadius: '50%',
                       background: 'rgba(82, 127, 199, 0.4)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: '0.75rem',
+                      fontSize: '0.72rem',
                       fontWeight: 'bold',
                       color: '#9FC9FF',
                     }}
@@ -257,17 +240,17 @@ export const PublicNavbar: React.FC = () => {
                   onClick={() => logout()}
                   className="btn btn-sm rounded-circle p-1 text-secondary"
                   title="Sign Out"
-                  style={{ width: '30px', height: '30px' }}
+                  style={{ width: '28px', height: '28px' }}
                 >
                   <i className="bi bi-box-arrow-right fs-6" />
                 </button>
               </div>
             ) : (
-              <Link to="/login" className="text-decoration-none">
+              <Link to="/login" className="text-decoration-none flex-shrink-0">
                 <button
-                  className="btn btn-sm rounded-pill px-3 py-1 fw-semibold text-white"
+                  className="btn btn-sm rounded-pill px-2 px-sm-3 py-1 fw-semibold text-white"
                   style={{
-                    fontSize: '0.82rem',
+                    fontSize: '0.8rem',
                     background: 'radial-gradient(100% 100% at 50% 0%, #6392DF 0%, #375994 100%)',
                     border: '1px solid rgba(159, 201, 255, 0.45)',
                     boxShadow: 'inset 0 1px 1px 0 rgba(255, 255, 255, 0.4), 0 0 16px rgba(82, 127, 199, 0.3)',

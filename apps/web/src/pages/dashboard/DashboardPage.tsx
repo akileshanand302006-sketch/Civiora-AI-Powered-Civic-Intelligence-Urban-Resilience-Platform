@@ -148,14 +148,14 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="d-flex align-items-center gap-2">
+        <div className="d-flex flex-wrap align-items-center gap-2">
           {/* 2D Google Map / 3D Digital Twin Viewport Toggle */}
           <GlassSegmentedControl
             value={mapViewMode}
             onChange={(val) => setMapViewMode(val as any)}
             options={[
-              { value: '2d_google', label: '2D Google Map', icon: 'map-fill' },
-              { value: '3d_city', label: '3D Digital Twin', icon: 'buildings' },
+              { value: '2d_google', label: '2D Map', icon: 'map-fill' },
+              { value: '3d_city', label: '3D Twin', icon: 'buildings' },
             ]}
           />
 
@@ -179,7 +179,7 @@ export const DashboardPage: React.FC = () => {
           depth="3d"
           glow
           style={{
-            height: '500px',
+            height: 'clamp(340px, 48vh, 500px)',
             borderRadius: '28px',
             overflow: 'hidden',
             boxShadow: '0 24px 70px rgba(0, 0, 0, 0.5), 0 0 40px rgba(10, 132, 255, 0.2)',
@@ -189,7 +189,8 @@ export const DashboardPage: React.FC = () => {
             <GoogleMapView
               initialLat={selectedLocation?.latitude || 11.0289}
               initialLng={selectedLocation?.longitude || 77.0279}
-              initialZoom={14}
+              initialZoom={13}
+              selectedDistrictId={selectedLocation?.districtId || 'all'}
               incidents={incidents.map((i) => ({
                 id: i._id || i.id,
                 latitude: i.location?.coordinates?.[1] || 11.0289,
@@ -203,6 +204,7 @@ export const DashboardPage: React.FC = () => {
                 if (found) setSelectedIncident(found);
               }}
             />
+
           ) : (
             <CityScene
               onSelectIncident={(id) => {
@@ -214,10 +216,10 @@ export const DashboardPage: React.FC = () => {
 
           {/* Floating Top Left Telemetry HUD */}
           <div
-            className="position-absolute top-0 start-0 m-3 p-3 glass-surface"
+            className="position-absolute top-0 start-0 m-2 m-sm-3 p-2 p-sm-3 glass-surface"
             style={{
               borderRadius: '16px',
-              maxWidth: '320px',
+              maxWidth: 'min(320px, calc(100% - 1.5rem))',
               background: 'rgba(10, 14, 23, 0.85)',
               backdropFilter: 'blur(20px)',
               border: '1px solid rgba(100, 210, 255, 0.3)',
@@ -238,10 +240,10 @@ export const DashboardPage: React.FC = () => {
                 {mapViewMode === '2d_google' ? 'GOOGLE MAPS GEOSPATIAL RADAR' : '3D SPATIAL COMMAND RADAR'}
               </span>
             </div>
-            <p className="small text-secondary mb-2" style={{ fontSize: '0.78rem' }}>
+            <p className="small text-secondary mb-2 d-none d-sm-block" style={{ fontSize: '0.78rem' }}>
               Focused Area: <strong>{selectedLocation?.city || 'Coimbatore'}</strong>. Real-time synchronisation across municipal field sensors and dispatches.
             </p>
-            <div className="d-flex gap-2">
+            <div className="d-flex flex-wrap gap-2">
               <span className="badge bg-primary bg-opacity-25 text-primary small">
                 {incidents.length} Active Nodes
               </span>
@@ -253,8 +255,8 @@ export const DashboardPage: React.FC = () => {
 
           {/* Floating Bottom Center Filter Toolbar */}
           <div
-            className="position-absolute bottom-0 start-50 translate-middle-x mb-3"
-            style={{ zIndex: 10 }}
+            className="position-absolute bottom-0 start-50 translate-middle-x mb-2 mb-sm-3"
+            style={{ zIndex: 10, maxWidth: 'calc(100% - 1.5rem)' }}
           >
             <GlassSegmentedControl
               value={activeFilter}
@@ -262,7 +264,7 @@ export const DashboardPage: React.FC = () => {
               options={[
                 { value: 'all', label: `All (${incidents.length})` },
                 { value: 'critical', label: 'Critical' },
-                { value: 'in_progress', label: 'In Progress' },
+                { value: 'in_progress', label: 'Active' },
                 { value: 'resolved', label: 'Resolved' },
               ]}
             />

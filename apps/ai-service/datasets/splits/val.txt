@@ -1,0 +1,2 @@
+C:\My Projects\Civic\apps\ai-service\datasets\eval_samples\images\drainage_obstruction_01.jpg
+C:\My Projects\Civic\apps\ai-service\datasets\eval_samples\images\garbage_01.jpg

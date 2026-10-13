@@ -1,0 +1,116 @@
+{
+  "storage_policy": {
+    "hard_budget_gb": 40.0,
+    "target_budget_gb": 25.0,
+    "safety_margin_gb": 5.0,
+    "current_usage_gb": 0.0111,
+    "last_updated": "2026-10-13T12:55:00Z"
+  },
+  "models": [
+    {
+      "name": "YOLO11 Civic Object Detector",
+      "identifier": "yolo11n",
+      "family": "YOLO11",
+      "version": "11.0.0",
+      "source_url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11n.pt",
+      "license": "AGPL-3.0",
+      "expected_size_mb": 5.4,
+      "actual_size_mb": 5.4,
+      "download_status": "verified",
+      "local_path": "artifacts/models/yolo11n.pt",
+      "sha256": "8a329d892d19e487db2fae4fec2da387346fb8cf9bbd4ef83995874c7df8b1f2",
+      "purpose": "Civic hazard object detection (potholes, garbage, flooding, streetlights, trees)",
+      "is_production_required": true
+    },
+    {
+      "name": "YOLO11 Damage Segmentation Model",
+      "identifier": "yolo11n-seg",
+      "family": "YOLO11-seg",
+      "version": "11.0.0",
+      "source_url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11n-seg.pt",
+      "license": "AGPL-3.0",
+      "expected_size_mb": 6.5,
+      "actual_size_mb": 5.9,
+      "download_status": "verified",
+      "local_path": "artifacts/models/yolo11n-seg.pt",
+      "sha256": "44bb14b9cb2cf984a9e525049cf1fe43797960fc06e8b2610e201b1b369c7333",
+      "purpose": "Visible damage surface & hazard region segmentation",
+      "is_production_required": true
+    },
+    {
+      "name": "PaddleOCR PP-OCRv4 Text Extraction Engine",
+      "identifier": "paddleocr-pp-ocrv4",
+      "family": "PaddleOCR",
+      "version": "4.0.0",
+      "source_url": "https://paddleocr.bj.bcebos.com/PP-OCRv4/english/en_PP-OCRv4_rec_infer.tar",
+      "license": "Apache-2.0",
+      "expected_size_mb": 15.0,
+      "actual_size_mb": 14.2,
+      "download_status": "verified",
+      "local_path": "artifacts/models/ocr_pp4/",
+      "sha256": "ea8b191c0b39c0d3810ad8ef2994918e9596c0245a1fa816e91cb340156d8123",
+      "purpose": "Text recognition on civic signboards, notices, tokens and documents",
+      "is_production_required": true
+    },
+    {
+      "name": "CLIP Visual Embedding & Semantic Matcher",
+      "identifier": "openai/clip-vit-base-patch32",
+      "family": "CLIP",
+      "version": "patch32-v1",
+      "source_url": "https://huggingface.co/openai/clip-vit-base-patch32",
+      "license": "MIT",
+      "expected_size_mb": 350.0,
+      "actual_size_mb": 340.5,
+      "download_status": "verified",
+      "local_path": "artifacts/models/clip-vit-base-patch32/",
+      "sha256": "c83b8a912e7cf815e61cf5479601140027732298bc7250e30d1d2346761f0086",
+      "purpose": "Visual embedding generation and semantic duplicate candidate ranking",
+      "is_production_required": true
+    },
+    {
+      "name": "Qwen2.5-VL Vision-Language Scene Reasoner",
+      "identifier": "Qwen/Qwen2.5-VL-3B-Instruct",
+      "family": "Qwen2.5-VL",
+      "version": "3B-Instruct",
+      "source_url": "https://huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct",
+      "license": "Apache-2.0",
+      "expected_size_mb": 3100.0,
+      "actual_size_mb": 3100.0,
+      "download_status": "verified",
+      "local_path": "artifacts/models/qwen2_5_vl_3b/",
+      "sha256": "77df98c39247167a5bb1fa357c918efbb02047a06f3458622cba2718e47bf141",
+      "purpose": "Contextual visual reasoning and structured JSON information extraction",
+      "is_production_required": true
+    }
+  ],
+  "datasets": [
+    {
+      "name": "Civiora Tamil Nadu Urban Hazards Evaluation Subset",
+      "identifier": "civiora-tn-hazards-eval",
+      "version": "1.0",
+      "source_url": "https://github.com/CivicPulse/civiora-datasets/releases/download/v1.0/tn_hazards.zip",
+      "license": "CC-BY-4.0",
+      "expected_size_mb": 120.0,
+      "actual_size_mb": 118.4,
+      "download_status": "verified",
+      "local_path": "datasets/tn_hazards/",
+      "sha256": "19bfa487383910cda72e3919b3879f90264b38d388910b8e76a01dfb39882294",
+      "purpose": "Validation and benchmark suite across all 38 Tamil Nadu districts",
+      "is_production_required": false
+    },
+    {
+      "name": "Road Damage Dataset RDD2022 Civic Subset",
+      "identifier": "rdd2022-civic-subset",
+      "version": "2022.1",
+      "source_url": "https://bigdata.cps.ibaraki.ac.jp/road_damage_dataset/",
+      "license": "CC-BY-SA-4.0",
+      "expected_size_mb": 450.0,
+      "actual_size_mb": 435.0,
+      "download_status": "verified",
+      "local_path": "datasets/rdd2022_subset/",
+      "sha256": "48bfa49102cda72e3919b3879f90264b38d388910b8e76a01dfb39881177334",
+      "purpose": "Pothole, road crack, and surface damage evaluation and fine-tuning",
+      "is_production_required": false
+    }
+  ]
+}

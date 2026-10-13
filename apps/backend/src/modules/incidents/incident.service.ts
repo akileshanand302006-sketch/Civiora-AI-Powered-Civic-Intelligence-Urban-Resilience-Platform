@@ -15,6 +15,7 @@ import {
   type IncidentCategory,
   type IncidentStatus,
   type IncidentPriority,
+  TAMIL_NADU_DISTRICTS,
 } from '@civicpulse/shared';
 import {
   NotFoundError,
@@ -43,6 +44,30 @@ export interface CreateIncidentDTO {
   };
   evidenceIds?: string[];
   reportingMode?: 'standard' | 'emergency' | 'voice' | 'quick';
+  ai?: {
+    category?: string;
+    confidence?: number;
+    severity?: string;
+    detectedObjects?: string[];
+    boundingBoxes?: Array<{
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      label: string;
+    }>;
+    nlpExtraction?: {
+      category: string;
+      issue: string;
+      severity: string;
+      impact: string;
+      potentialRisk: string;
+    };
+    processedAt?: string | Date;
+    modelVersion?: string;
+  };
+  aiInferenceId?: string;
+  severityScore?: number;
 }
 
 export interface IncidentFilterOptions {
@@ -58,7 +83,10 @@ export interface IncidentFilterOptions {
   search?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  districtId?: string;
+  bounds?: string; // sw_lng,sw_lat,ne_lng,ne_lat
 }
+
 
 /** Generates a human-readable sequential incident identifier: e.g. CP-2026-X8K9 */
 function generateIncidentNumber(): string {
@@ -118,11 +146,44 @@ export async function createIncident(
   organizationId: string,
   data: CreateIncidentDTO,
 ): Promise<IIncident> {
+  if (
+    !data.location?.coordinates ||
+    !Array.isArray(data.location.coordinates) ||
+    data.location.coordinates.length !== 2
+  ) {
+    throw new BadRequestError('Valid GeoJSON [longitude, latitude] coordinates are required');
+  }
+
+  const [lng, lat] = data.location.coordinates;
+  if (typeof lng !== 'number' || typeof lat !== 'number' || isNaN(lng) || isNaN(lat)) {
+    throw new BadRequestError('Coordinates must be valid numbers');
+  }
+
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    throw new BadRequestError('Latitude must be between -90 and 90, Longitude between -180 and 180');
+  }
+
   const incidentNumber = generateIncidentNumber();
-  const publicCoords = fuzzCoordinates(data.location.coordinates[0], data.location.coordinates[1]);
+  const publicCoords = fuzzCoordinates(lng, lat);
   const isEmergency = data.isEmergency ?? (data.reportingMode === 'emergency');
   const priority = data.priority || (isEmergency ? INCIDENT_PRIORITIES.CRITICAL : INCIDENT_PRIORITIES.MEDIUM);
   const initialRisk = computePreliminaryRisk(priority, isEmergency);
+
+  // Calibrate risk score if AI Severity Engine score is provided
+  let finalRiskScore = initialRisk.score;
+  let finalRiskLevel = initialRisk.level;
+  const riskFactors = [...initialRisk.factors];
+
+  if (typeof data.severityScore === 'number' && !isNaN(data.severityScore)) {
+    finalRiskScore = Math.max(initialRisk.score, Math.round(data.severityScore));
+    finalRiskLevel =
+      finalRiskScore >= 80 ? 'critical' : finalRiskScore >= 60 ? 'high' : finalRiskScore >= 35 ? 'medium' : 'low';
+    riskFactors.push({
+      factor: 'ai_vision_severity',
+      weight: 0.4,
+      explanation: `Calibrated AI visual hazard severity score: ${data.severityScore}/100`,
+    });
+  }
 
   const incident = new Incident({
     organizationId: new Types.ObjectId(organizationId),
@@ -142,20 +203,26 @@ export async function createIncident(
       publicCoordinates: publicCoords,
     },
     risk: {
-      score: initialRisk.score,
-      level: initialRisk.level,
-      factors: initialRisk.factors,
+      score: finalRiskScore,
+      level: finalRiskLevel,
+      factors: riskFactors,
       calculatedAt: new Date(),
     },
     ai: {
-      detectedObjects: [],
-      nlpExtraction: {
+      category: data.ai?.category || data.category,
+      confidence: data.ai?.confidence,
+      severity: data.ai?.severity || priority,
+      detectedObjects: data.ai?.detectedObjects || [],
+      boundingBoxes: data.ai?.boundingBoxes,
+      nlpExtraction: data.ai?.nlpExtraction || {
         category: data.category,
         issue: data.title,
         severity: priority,
         impact: isEmergency ? 'Immediate danger to safety' : 'Municipal inconvenience',
-        potentialRisk: initialRisk.level,
+        potentialRisk: finalRiskLevel,
       },
+      processedAt: data.ai?.processedAt ? new Date(data.ai.processedAt) : new Date(),
+      modelVersion: data.ai?.modelVersion || 'Civiora-Multimodal-Pipeline-v1.0',
     },
     cluster: {
       isMaster: true,
@@ -186,6 +253,22 @@ export async function createIncident(
   });
 
   await incident.save();
+
+  // Link AIInference document in MongoDB Atlas if ID provided
+  if (data.aiInferenceId) {
+    try {
+      const { AIInference } = await import('../ai/aiInference.model.js');
+      await AIInference.findByIdAndUpdate(data.aiInferenceId, {
+        incidentId: incident._id,
+      });
+      logger.info(
+        { aiInferenceId: data.aiInferenceId, incidentId: incident._id },
+        'Linked AIInference record to newly created Incident in MongoDB Atlas'
+      );
+    } catch (linkErr) {
+      logger.warn({ err: linkErr }, 'Could not link AIInference to Incident');
+    }
+  }
 
   logger.info(
     { incidentId: incident._id, incidentNumber: incident.incidentNumber, org: organizationId },
@@ -247,6 +330,35 @@ export async function getIncidents(
       { 'location.address': { $regex: filters.search, $options: 'i' } },
     ];
   }
+
+  // Geospatial Viewport Bounds & District Filtering
+  if (filters.bounds) {
+    const parts = filters.bounds.split(',').map((p) => parseFloat(p.trim()));
+    if (parts.length === 4 && parts.every((p) => !isNaN(p))) {
+      const [sw_lng, sw_lat, ne_lng, ne_lat] = parts;
+      query['location.coordinates'] = {
+        $geoWithin: {
+          $box: [
+            [sw_lng, sw_lat],
+            [ne_lng, ne_lat],
+          ],
+        },
+      };
+    }
+  } else if (filters.districtId && filters.districtId !== 'all') {
+    const dist = TAMIL_NADU_DISTRICTS.find((d) => d.id === filters.districtId);
+    if (dist) {
+      query['location.coordinates'] = {
+        $geoWithin: {
+          $box: [
+            [dist.bounds.west, dist.bounds.south],
+            [dist.bounds.east, dist.bounds.north],
+          ],
+        },
+      };
+    }
+  }
+
 
   const sortOrder = filters.sortOrder === 'asc' ? 1 : -1;
   const sortField = filters.sortBy || 'createdAt';

@@ -149,7 +149,9 @@ export const LoginPage: React.FC = () => {
       // Smooth spatial transition sequence before entering location setup / dashboard
       setIsTransitioning(true);
       setTimeout(() => {
-        login(data.user, data.tokens.accessToken, data.tokens.refreshToken);
+        const accessToken = data.tokens?.accessToken || data.accessToken;
+        const refreshToken = data.tokens?.refreshToken || data.refreshToken;
+        login(data.user, accessToken, refreshToken);
         const redirectUrl = searchParams.get('redirect');
         const hasLocation = Boolean(localStorage.getItem('cp_selected_location'));
 
@@ -415,13 +417,13 @@ export const LoginPage: React.FC = () => {
                   />
 
                   <GlassInput
-                    label="Municipal Tenant Slug"
+                    label="Municipal Tenant Slug (Optional)"
                     type="text"
-                    required
+                    required={false}
                     icon="buildings"
                     value={orgSlug}
                     onChange={(e) => setOrgSlug(e.target.value)}
-                    helperText="Default tenant: metropolis"
+                    helperText="Default: metropolis (auto-detected from your account)"
                   />
 
                   <GlassButton

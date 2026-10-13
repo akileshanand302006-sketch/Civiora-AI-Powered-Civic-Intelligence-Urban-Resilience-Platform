@@ -6,6 +6,7 @@ import { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
+import { isAllowedOrigin } from '../config/cors.js';
 import { logger } from '../utils/logger.js';
 import { SOCKET_ROOMS, type SocketEvent } from '@civicpulse/shared';
 import type { JwtPayload } from '../middleware/authenticate.js';
@@ -21,7 +22,13 @@ export interface AuthenticatedSocket extends Socket {
 export function initSocketServer(httpServer: HttpServer): Server {
   io = new Server(httpServer, {
     cors: {
-      origin: env.WS_CORS_ORIGIN.split(',').map((o) => o.trim()),
+      origin: (origin, callback) => {
+        if (isAllowedOrigin(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error(`Civiora Socket: Origin ${origin} not permitted.`));
+        }
+      },
       methods: ['GET', 'POST'],
       credentials: true,
     },

@@ -1,20 +1,28 @@
 // ============================================================
-// CivicPulse Location Store (Zustand)
+// Civiora Location Store (Zustand)
 // Exact Location Management + Saved Places + Geospatial Context
+// Statewide Tamil Nadu 38 Districts Support
 // ============================================================
 
 import { create } from 'zustand';
+import {
+  TAMIL_NADU_CENTER,
+  TAMIL_NADU_DISTRICTS,
+  resolveTamilNaduDistrict,
+} from '@civicpulse/shared';
 
 export interface CivicLocation {
   latitude: number;
   longitude: number;
   accuracy?: number;
+  accuracyConfidence?: 'high' | 'approximate' | 'low' | 'unavailable';
   formattedAddress: string;
   name?: string;
   street?: string;
   locality?: string;
   city: string;
   district?: string;
+  districtId?: string;
   state: string;
   country: string;
   postalCode?: string;
@@ -31,27 +39,175 @@ export interface SavedLocation {
   isDefault?: boolean;
 }
 
-// Canonical Default: Coimbatore, Tamil Nadu, India (Real-world reference)
-export const DEFAULT_CIVIC_LOCATION: CivicLocation = {
-  latitude: 11.0289,
-  longitude: 77.0279,
-  accuracy: 12,
-  formattedAddress: 'Coimbatore Institute of Technology, Avinashi Rd, Civil Aerodrome Post, Coimbatore, Tamil Nadu 641014, India',
-  name: 'Coimbatore Institute of Technology',
-  street: 'Avinashi Road',
-  locality: 'Civil Aerodrome Post',
-  city: 'Coimbatore',
-  district: 'Coimbatore',
+// Canonical Statewide Default: Tamil Nadu Central Command (Tiruchirappalli / Statewide Hub)
+export const TAMIL_NADU_DEFAULT_LOCATION: CivicLocation = {
+  latitude: TAMIL_NADU_CENTER[1], // 11.1271
+  longitude: TAMIL_NADU_CENTER[0], // 78.6569
+  accuracy: 10,
+  accuracyConfidence: 'high',
+  formattedAddress: 'Tamil Nadu State Central Civic Hub, Tiruchirappalli, Tamil Nadu 620001, India',
+  name: 'Tamil Nadu Statewide Command',
+  street: 'State Highway Corridor',
+  locality: 'Central Civic Zone',
+  city: 'Tiruchirappalli',
+  district: 'Tiruchirappalli',
+  districtId: 'tiruchirappalli',
   state: 'Tamil Nadu',
   country: 'India',
-  postalCode: '641014',
+  postalCode: '620001',
   source: 'SAVED_LOCATION',
   selectedAt: new Date().toISOString(),
 };
 
+export const DEFAULT_CIVIC_LOCATION = TAMIL_NADU_DEFAULT_LOCATION;
+
+// Curated Tamil Nadu Regional Hubs
+export const TAMIL_NADU_REGIONAL_HUBS: SavedLocation[] = [
+  {
+    id: 'hub-chennai',
+    name: 'Chennai Secretariat & Metro Core',
+    type: 'work',
+    location: {
+      latitude: 13.0827,
+      longitude: 80.2707,
+      accuracy: 8,
+      accuracyConfidence: 'high',
+      formattedAddress: 'Fort St. George, Rajaji Salai, Chennai, Tamil Nadu 600009',
+      name: 'Chennai Secretariat',
+      street: 'Rajaji Salai',
+      locality: 'George Town',
+      city: 'Chennai',
+      district: 'Chennai',
+      districtId: 'chennai',
+      state: 'Tamil Nadu',
+      country: 'India',
+      postalCode: '600009',
+      source: 'SAVED_LOCATION',
+      selectedAt: new Date().toISOString(),
+    },
+  },
+  {
+    id: 'hub-coimbatore',
+    name: 'Coimbatore Institute of Technology (CIT)',
+    type: 'college',
+    location: {
+      latitude: 11.0289,
+      longitude: 77.0279,
+      accuracy: 10,
+      accuracyConfidence: 'high',
+      formattedAddress: 'CIT, Avinashi Rd, Civil Aerodrome Post, Coimbatore, Tamil Nadu 641014',
+      name: 'Coimbatore Institute of Technology',
+      street: 'Avinashi Road',
+      locality: 'Peelamedu',
+      city: 'Coimbatore',
+      district: 'Coimbatore',
+      districtId: 'coimbatore',
+      state: 'Tamil Nadu',
+      country: 'India',
+      postalCode: '641014',
+      source: 'SAVED_LOCATION',
+      selectedAt: new Date().toISOString(),
+    },
+    isDefault: true,
+  },
+  {
+    id: 'hub-madurai',
+    name: 'Madurai Smart City Center',
+    type: 'work',
+    location: {
+      latitude: 9.9252,
+      longitude: 78.1198,
+      accuracy: 12,
+      accuracyConfidence: 'high',
+      formattedAddress: 'Meenakshi Temple Zone, Madurai, Tamil Nadu 625001',
+      name: 'Madurai Central',
+      street: 'West Tower Street',
+      locality: 'Meenakshi Nagar',
+      city: 'Madurai',
+      district: 'Madurai',
+      districtId: 'madurai',
+      state: 'Tamil Nadu',
+      country: 'India',
+      postalCode: '625001',
+      source: 'SAVED_LOCATION',
+      selectedAt: new Date().toISOString(),
+    },
+  },
+  {
+    id: 'hub-salem',
+    name: 'Salem Municipal Corporation Hub',
+    type: 'work',
+    location: {
+      latitude: 11.6643,
+      longitude: 78.146,
+      accuracy: 15,
+      accuracyConfidence: 'high',
+      formattedAddress: 'Fort Main Road, Salem, Tamil Nadu 636001',
+      name: 'Salem Municipal Core',
+      street: 'Fort Main Road',
+      locality: 'Hasthampatti',
+      city: 'Salem',
+      district: 'Salem',
+      districtId: 'salem',
+      state: 'Tamil Nadu',
+      country: 'India',
+      postalCode: '636001',
+      source: 'SAVED_LOCATION',
+      selectedAt: new Date().toISOString(),
+    },
+  },
+  {
+    id: 'hub-nilgiris',
+    name: 'The Nilgiris Hill Governance Centre (Ooty)',
+    type: 'work',
+    location: {
+      latitude: 11.4102,
+      longitude: 76.7032,
+      accuracy: 15,
+      accuracyConfidence: 'high',
+      formattedAddress: 'Charing Cross, Udhagamandalam, The Nilgiris, Tamil Nadu 643001',
+      name: 'Nilgiris Civic Centre',
+      street: 'Commercial Road',
+      locality: 'Charing Cross',
+      city: 'Udhagamandalam (Ooty)',
+      district: 'The Nilgiris',
+      districtId: 'the_nilgiris',
+      state: 'Tamil Nadu',
+      country: 'India',
+      postalCode: '643001',
+      source: 'SAVED_LOCATION',
+      selectedAt: new Date().toISOString(),
+    },
+  },
+  {
+    id: 'hub-kanniyakumari',
+    name: 'Kanniyakumari Coastal Resilience Unit',
+    type: 'work',
+    location: {
+      latitude: 8.0883,
+      longitude: 77.5385,
+      accuracy: 12,
+      accuracyConfidence: 'high',
+      formattedAddress: 'Beach Road, Kanniyakumari, Tamil Nadu 629702',
+      name: 'Kanniyakumari Unit',
+      street: 'Beach Road',
+      locality: 'Cape Comorin',
+      city: 'Kanniyakumari',
+      district: 'Kanniyakumari',
+      districtId: 'kanniyakumari',
+      state: 'Tamil Nadu',
+      country: 'India',
+      postalCode: '629702',
+      source: 'SAVED_LOCATION',
+      selectedAt: new Date().toISOString(),
+    },
+  },
+];
+
 interface LocationState {
   selectedLocation: CivicLocation | null;
   savedLocations: SavedLocation[];
+  selectedDistrictId: string; // 'all' or canonical district id
   locationPermission: 'prompt' | 'granted' | 'denied';
   isLocationModalOpen: boolean;
   isAuthGateOpen: boolean;
@@ -59,6 +215,7 @@ interface LocationState {
   authGateRedirectUrl?: string;
 
   setSelectedLocation: (loc: CivicLocation) => void;
+  setSelectedDistrictId: (districtId: string) => void;
   clearSelectedLocation: () => void;
   addSavedLocation: (name: string, type: SavedLocation['type'], loc: CivicLocation, isDefault?: boolean) => void;
   removeSavedLocation: (id: string) => void;
@@ -73,62 +230,52 @@ interface LocationState {
 
 export const useLocationStore = create<LocationState>((set, get) => ({
   selectedLocation: null,
-  savedLocations: [
-    {
-      id: 'saved-college-1',
-      name: 'Coimbatore Institute of Technology',
-      type: 'college',
-      location: DEFAULT_CIVIC_LOCATION,
-      isDefault: true,
-    },
-    {
-      id: 'saved-home-1',
-      name: 'Home (Race Course)',
-      type: 'home',
-      location: {
-        latitude: 11.0018,
-        longitude: 76.9744,
-        accuracy: 15,
-        formattedAddress: 'Race Course Road, Gopalapuram, Coimbatore, Tamil Nadu 641018, India',
-        name: 'Race Course Residence',
-        street: 'Race Course Road',
-        locality: 'Gopalapuram',
-        city: 'Coimbatore',
-        state: 'Tamil Nadu',
-        country: 'India',
-        postalCode: '641018',
-        source: 'SAVED_LOCATION',
-        selectedAt: new Date().toISOString(),
-      },
-    },
-    {
-      id: 'saved-work-1',
-      name: 'TIDEL Park IT SEZ',
-      type: 'work',
-      location: {
-        latitude: 11.0264,
-        longitude: 77.0142,
-        accuracy: 20,
-        formattedAddress: 'TIDEL Park Coimbatore, Civil Aerodrome Post, Coimbatore, Tamil Nadu 641014, India',
-        name: 'TIDEL Park Coimbatore',
-        street: 'Avinashi Road',
-        locality: 'Peelamedu',
-        city: 'Coimbatore',
-        state: 'Tamil Nadu',
-        country: 'India',
-        postalCode: '641014',
-        source: 'SAVED_LOCATION',
-        selectedAt: new Date().toISOString(),
-      },
-    },
-  ],
+  savedLocations: TAMIL_NADU_REGIONAL_HUBS,
+  selectedDistrictId: 'all',
   locationPermission: 'prompt',
   isLocationModalOpen: false,
   isAuthGateOpen: false,
 
   setSelectedLocation: (loc: CivicLocation) => {
+    // Automatically correlate district if not populated
+    if (!loc.districtId && (loc.district || loc.city)) {
+      const match = resolveTamilNaduDistrict(loc.district || loc.city);
+      if (match) {
+        loc.districtId = match.id;
+        loc.district = match.name;
+      }
+    }
     localStorage.setItem('cp_selected_location', JSON.stringify(loc));
-    set({ selectedLocation: loc });
+    set({
+      selectedLocation: loc,
+      selectedDistrictId: loc.districtId || get().selectedDistrictId,
+    });
+  },
+
+  setSelectedDistrictId: (districtId: string) => {
+    set({ selectedDistrictId: districtId });
+    if (districtId !== 'all') {
+      const district = TAMIL_NADU_DISTRICTS.find((d) => d.id === districtId);
+      if (district) {
+        const hubLoc: CivicLocation = {
+          latitude: district.center[1],
+          longitude: district.center[0],
+          accuracy: 50,
+          accuracyConfidence: 'approximate',
+          formattedAddress: `${district.name} District Administrative Headquarters, Tamil Nadu, India`,
+          name: `${district.name} Headquarters`,
+          city: district.headquarters,
+          district: district.name,
+          districtId: district.id,
+          state: 'Tamil Nadu',
+          country: 'India',
+          source: 'MAP_SELECTION',
+          selectedAt: new Date().toISOString(),
+        };
+        localStorage.setItem('cp_selected_location', JSON.stringify(hubLoc));
+        set({ selectedLocation: hubLoc });
+      }
+    }
   },
 
   clearSelectedLocation: () => {
@@ -186,7 +333,12 @@ export const useLocationStore = create<LocationState>((set, get) => ({
       authGateMessage: message,
       authGateRedirectUrl: redirectUrl,
     }),
-  closeAuthGate: () => set({ isAuthGateOpen: false, authGateMessage: undefined, authGateRedirectUrl: undefined }),
+  closeAuthGate: () =>
+    set({
+      isAuthGateOpen: false,
+      authGateMessage: undefined,
+      authGateRedirectUrl: undefined,
+    }),
 
   initializeLocation: () => {
     const stored = localStorage.getItem('cp_selected_location');
@@ -203,9 +355,16 @@ export const useLocationStore = create<LocationState>((set, get) => ({
     }
     if (stored) {
       try {
-        set({ selectedLocation: JSON.parse(stored) });
+        const parsed = JSON.parse(stored);
+        set({
+          selectedLocation: parsed,
+          selectedDistrictId: parsed.districtId || 'all',
+        });
         return;
       } catch {}
     }
+
+    // Default to the statewide central command location if none stored
+    set({ selectedLocation: TAMIL_NADU_DEFAULT_LOCATION, selectedDistrictId: 'all' });
   },
 }));

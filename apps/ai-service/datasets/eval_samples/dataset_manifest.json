@@ -1,0 +1,216 @@
+{
+  "name": "Civiora Multi-Modal Ground Truth Benchmark Suite",
+  "sample_count": 8,
+  "classes": [
+    "pothole",
+    "road_crack",
+    "garbage",
+    "flooding",
+    "fallen_tree",
+    "damaged_streetlight",
+    "damaged_traffic_sign",
+    "drainage_obstruction"
+  ],
+  "created_at": "2026-10-13T13:00:00Z",
+  "models_supported": [
+    "YOLO11",
+    "PaddleOCR",
+    "Qwen2.5-VL",
+    "CLIP",
+    "YOLO11-seg"
+  ],
+  "samples": [
+    {
+      "id": "pothole_01",
+      "category": "pothole",
+      "class_idx": 0,
+      "bbox_norm": [
+        0.35,
+        0.55,
+        0.3,
+        0.25
+      ],
+      "bg_color": [
+        95,
+        95,
+        100
+      ],
+      "hazard_color": [
+        35,
+        30,
+        30
+      ],
+      "sign_text": "SLOW DOWN: POTHOLE AHEAD - CHENNAI OMR",
+      "description": "Deep asphalt pothole on urban multi-lane road surface with cracked perimeter",
+      "damage_pct": 8.5
+    },
+    {
+      "id": "road_crack_01",
+      "category": "road_crack",
+      "class_idx": 1,
+      "bbox_norm": [
+        0.45,
+        0.5,
+        0.5,
+        0.3
+      ],
+      "bg_color": [
+        110,
+        110,
+        115
+      ],
+      "hazard_color": [
+        45,
+        45,
+        45
+      ],
+      "sign_text": "ROAD WORKS IN PROGRESS COIMBATORE CORPN",
+      "description": "Longitudinal and alligator road surface cracks extending across roadway lane",
+      "damage_pct": 14.2
+    },
+    {
+      "id": "garbage_01",
+      "category": "garbage",
+      "class_idx": 2,
+      "bbox_norm": [
+        0.5,
+        0.6,
+        0.45,
+        0.35
+      ],
+      "bg_color": [
+        140,
+        140,
+        130
+      ],
+      "hazard_color": [
+        80,
+        100,
+        60
+      ],
+      "sign_text": "NO DUMPING ZONE - FINE RS 5000 GCC",
+      "description": "Accumulated municipal solid waste pile obstructing pedestrian footpath",
+      "damage_pct": 18.0
+    },
+    {
+      "id": "flooding_01",
+      "category": "flooding",
+      "class_idx": 3,
+      "bbox_norm": [
+        0.5,
+        0.7,
+        0.85,
+        0.4
+      ],
+      "bg_color": [
+        70,
+        85,
+        110
+      ],
+      "hazard_color": [
+        40,
+        60,
+        90
+      ],
+      "sign_text": "FLOOD PRONE AREA CAUTION - MADURAI",
+      "description": "Severe monsoon rainwater accumulation completely submerging street surface",
+      "damage_pct": 34.0
+    },
+    {
+      "id": "fallen_tree_01",
+      "category": "fallen_tree",
+      "class_idx": 4,
+      "bbox_norm": [
+        0.5,
+        0.5,
+        0.75,
+        0.45
+      ],
+      "bg_color": [
+        100,
+        120,
+        100
+      ],
+      "hazard_color": [
+        60,
+        45,
+        25
+      ],
+      "sign_text": "ROAD BLOCKED DANGER",
+      "description": "Large fallen banyan tree branch blocking entire vehicular road corridor",
+      "damage_pct": 28.5
+    },
+    {
+      "id": "damaged_streetlight_01",
+      "category": "damaged_streetlight",
+      "class_idx": 5,
+      "bbox_norm": [
+        0.65,
+        0.4,
+        0.2,
+        0.6
+      ],
+      "bg_color": [
+        120,
+        130,
+        140
+      ],
+      "hazard_color": [
+        70,
+        70,
+        80
+      ],
+      "sign_text": "TANGEDCO HIGH VOLTAGE POLE NO 44B",
+      "description": "Tilted municipal lighting pole with exposed severed wiring and shattered fixture",
+      "damage_pct": 12.0
+    },
+    {
+      "id": "damaged_traffic_sign_01",
+      "category": "damaged_traffic_sign",
+      "class_idx": 6,
+      "bbox_norm": [
+        0.3,
+        0.35,
+        0.25,
+        0.45
+      ],
+      "bg_color": [
+        150,
+        140,
+        130
+      ],
+      "hazard_color": [
+        180,
+        50,
+        40
+      ],
+      "sign_text": "SPEED LIMIT 40 KM/H SCHOOL ZONE",
+      "description": "Vandalized, bent metal regulatory speed limit traffic signage near school crossing",
+      "damage_pct": 9.5
+    },
+    {
+      "id": "drainage_obstruction_01",
+      "category": "drainage_obstruction",
+      "class_idx": 7,
+      "bbox_norm": [
+        0.5,
+        0.65,
+        0.4,
+        0.3
+      ],
+      "bg_color": [
+        80,
+        85,
+        90
+      ],
+      "hazard_color": [
+        40,
+        45,
+        50
+      ],
+      "sign_text": "GREATER CHENNAI CORPORATION STORM DRAIN 102",
+      "description": "Stormwater runoff inlet grating completely blocked by plastic silt and debris",
+      "damage_pct": 15.0
+    }
+  ]
+}

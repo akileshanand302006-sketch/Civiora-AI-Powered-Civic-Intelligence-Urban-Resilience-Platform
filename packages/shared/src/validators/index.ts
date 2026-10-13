@@ -99,6 +99,38 @@ export const createIncidentSchema = z.object({
   }),
   evidenceIds: z.array(objectIdSchema).max(10).optional(),
   reportingMode: z.enum(['standard', 'emergency', 'voice', 'quick']).default('standard'),
+  ai: z
+    .object({
+      category: z.string().optional(),
+      confidence: z.number().optional(),
+      severity: z.string().optional(),
+      detectedObjects: z.array(z.string()).optional(),
+      boundingBoxes: z
+        .array(
+          z.object({
+            x: z.number(),
+            y: z.number(),
+            w: z.number(),
+            h: z.number(),
+            label: z.string(),
+          })
+        )
+        .optional(),
+      nlpExtraction: z
+        .object({
+          category: z.string().optional(),
+          issue: z.string().optional(),
+          severity: z.string().optional(),
+          impact: z.string().optional(),
+          potentialRisk: z.string().optional(),
+        })
+        .optional(),
+      processedAt: z.union([z.string(), z.date()]).optional(),
+      modelVersion: z.string().optional(),
+    })
+    .optional(),
+  aiInferenceId: z.string().optional(),
+  severityScore: z.number().optional(),
 });
 
 export const updateIncidentSchema = z.object({

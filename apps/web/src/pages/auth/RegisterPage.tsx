@@ -37,8 +37,8 @@ export const RegisterPage: React.FC = () => {
 
       setSuccess(true);
       setTimeout(() => {
-        navigate('/login');
-      }, 2000);
+        navigate(`/login?email=${encodeURIComponent(email)}`);
+      }, 1500);
     } catch (err: any) {
       const msg = err.response?.data?.error?.message || 'Registration failed. Please try again.';
       setError(msg);

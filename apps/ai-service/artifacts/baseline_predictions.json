@@ -1,0 +1,144 @@
+{
+  "benchmark_timestamp": "2026-10-13T10:03:07Z",
+  "model": {
+    "name": "YOLO11n (Pretrained COCO baseline)",
+    "checkpoint": "yolo11n.pt",
+    "input_size": 640,
+    "conf_threshold": 0.2
+  },
+  "summary": {
+    "total_images": 8,
+    "total_detections": 3,
+    "avg_latency_ms": 368.75,
+    "device": "CPU"
+  },
+  "predictions": [
+    {
+      "image_filename": "damaged_streetlight_01.jpg",
+      "image_width": 640,
+      "image_height": 640,
+      "latency_ms": 2555.11,
+      "detections_count": 0,
+      "detections": []
+    },
+    {
+      "image_filename": "damaged_traffic_sign_01.jpg",
+      "image_width": 640,
+      "image_height": 640,
+      "latency_ms": 90.81,
+      "detections_count": 0,
+      "detections": []
+    },
+    {
+      "image_filename": "drainage_obstruction_01.jpg",
+      "image_width": 640,
+      "image_height": 640,
+      "latency_ms": 57.09,
+      "detections_count": 1,
+      "detections": [
+        {
+          "class_id": 62,
+          "raw_label": "tv",
+          "confidence": 0.3084,
+          "bbox_pixels": [
+            191.5,
+            319.2,
+            448.56,
+            511.38
+          ],
+          "bbox_normalized": {
+            "x_min": 0.2992,
+            "y_min": 0.4987,
+            "x_max": 0.7009,
+            "y_max": 0.799,
+            "width": 0.4017,
+            "height": 0.3003,
+            "box_area_ratio": 0.1206
+          }
+        }
+      ]
+    },
+    {
+      "image_filename": "fallen_tree_01.jpg",
+      "image_width": 640,
+      "image_height": 640,
+      "latency_ms": 53.2,
+      "detections_count": 0,
+      "detections": []
+    },
+    {
+      "image_filename": "flooding_01.jpg",
+      "image_width": 640,
+      "image_height": 640,
+      "latency_ms": 46.38,
+      "detections_count": 0,
+      "detections": []
+    },
+    {
+      "image_filename": "garbage_01.jpg",
+      "image_width": 640,
+      "image_height": 640,
+      "latency_ms": 50.64,
+      "detections_count": 0,
+      "detections": []
+    },
+    {
+      "image_filename": "pothole_01.jpg",
+      "image_width": 640,
+      "image_height": 640,
+      "latency_ms": 47.75,
+      "detections_count": 1,
+      "detections": [
+        {
+          "class_id": 62,
+          "raw_label": "tv",
+          "confidence": 0.4077,
+          "bbox_pixels": [
+            127.73,
+            271.8,
+            321.16,
+            432.22
+          ],
+          "bbox_normalized": {
+            "x_min": 0.1996,
+            "y_min": 0.4247,
+            "x_max": 0.5018,
+            "y_max": 0.6753,
+            "width": 0.3022,
+            "height": 0.2506,
+            "box_area_ratio": 0.0757
+          }
+        }
+      ]
+    },
+    {
+      "image_filename": "road_crack_01.jpg",
+      "image_width": 640,
+      "image_height": 640,
+      "latency_ms": 49.04,
+      "detections_count": 1,
+      "detections": [
+        {
+          "class_id": 62,
+          "raw_label": "tv",
+          "confidence": 0.7473,
+          "bbox_pixels": [
+            129.36,
+            222.51,
+            449.16,
+            413.96
+          ],
+          "bbox_normalized": {
+            "x_min": 0.2021,
+            "y_min": 0.3477,
+            "x_max": 0.7018,
+            "y_max": 0.6468,
+            "width": 0.4997,
+            "height": 0.2991,
+            "box_area_ratio": 0.1495
+          }
+        }
+      ]
+    }
+  ]
+}

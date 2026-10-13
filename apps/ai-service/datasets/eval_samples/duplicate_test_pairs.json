@@ -1,0 +1,30 @@
+{
+  "identical_pairs": [
+    {
+      "image_a": "pothole_01.jpg",
+      "image_b": "pothole_01.jpg",
+      "is_duplicate": true,
+      "expected_similarity": 1.0
+    },
+    {
+      "image_a": "flooding_01.jpg",
+      "image_b": "flooding_01.jpg",
+      "is_duplicate": true,
+      "expected_similarity": 1.0
+    }
+  ],
+  "distinct_pairs": [
+    {
+      "image_a": "pothole_01.jpg",
+      "image_b": "garbage_01.jpg",
+      "is_duplicate": false,
+      "expected_max_similarity": 0.6
+    },
+    {
+      "image_a": "flooding_01.jpg",
+      "image_b": "damaged_traffic_sign_01.jpg",
+      "is_duplicate": false,
+      "expected_max_similarity": 0.55
+    }
+  ]
+}

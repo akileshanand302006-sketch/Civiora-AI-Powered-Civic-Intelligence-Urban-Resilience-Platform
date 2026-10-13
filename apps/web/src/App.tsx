@@ -11,6 +11,7 @@ import { LandingPage } from './pages/landing/LandingPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { LocationSetupPage } from './pages/location/LocationSetupPage';
+import { ContactPage } from './pages/contact/ContactPage';
 import { ReportIncidentPage } from './pages/citizen/ReportIncidentPage';
 import { LiveCityMapPage } from './pages/map/LiveCityMapPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
@@ -28,6 +29,7 @@ export const App: React.FC = () => {
       <Route element={<PublicLayout />}>
         {/* ── Public Routes (Freely Accessible) ─────────────── */}
         <Route path="/" element={<LandingPage />} />
+        <Route path="/contact" element={<ContactPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
@@ -72,6 +74,7 @@ export const App: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route path="/analytics" element={<Navigate to="/dashboard" replace />} />
 
         {/* Fallback Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />

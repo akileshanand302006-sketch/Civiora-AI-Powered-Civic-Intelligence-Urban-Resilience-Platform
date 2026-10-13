@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-10-13T10:10:34Z",
+  "hardware": {
+    "device": "auto",
+    "vram_budget": "6GB Laptop GPU optimized"
+  },
+  "models": {
+    "yolo11": {
+      "model_family": "YOLO11",
+      "model_id": "yolo11n",
+      "tested_samples": 8,
+      "total_detections": 2,
+      "avg_latency_ms": 417.52,
+      "status": "PASS",
+      "sample_output_category": "other"
+    },
+    "ocr": {
+      "model_family": "PaddleOCR / Engine",
+      "tested_samples": 8,
+      "avg_latency_ms": 1975.42,
+      "token_recall_pct": 47.9,
+      "status": "PASS"
+    },
+    "qwen2_5_vl": {
+      "model_family": "Qwen2.5-VL",
+      "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
+      "structured_schema_valid": true,
+      "latency_ms": 32.14,
+      "sample_description": "Visible asphalt surface degradation featuring road cavity and pavement depression. The image indicates an untreated road...",
+      "uncertainty_score": 0.08,
+      "status": "PASS"
+    },
+    "clip": {
+      "model_family": "CLIP",
+      "model_id": "openai/clip-vit-base-patch32",
+      "embedding_dimensions": 512,
+      "l2_unit_norm": 1.0,
+      "avg_latency_ms": 5975.16,
+      "duplicate_resolution_accuracy_pct": 100.0,
+      "status": "PASS"
+    },
+    "segmentation": {
+      "model_family": "YOLO11-seg",
+      "model_id": "yolo11n-seg",
+      "avg_latency_ms": 111.72,
+      "polygon_masks_produced": false,
+      "mean_damage_surface_pct": 0.0,
+      "status": "PASS"
+    }
+  }
+}

@@ -12,3 +12,4 @@ export * from './GlassCommandBar';
 export * from './GlassModal';
 export * from './GlassNotificationCapsule';
 export * from './GlassSegmentedControl';
+export * from './GlassHazardDropdown';

@@ -1,0 +1,20 @@
+{
+  "status": "PASSED",
+  "total_images": 8,
+  "valid_images": 8,
+  "corrupt_images": 0,
+  "valid_bboxes": 8,
+  "invalid_bboxes": 0,
+  "valid_masks": 8,
+  "duplicates_count": 0,
+  "class_distribution": {
+    "5": 1,
+    "6": 1,
+    "7": 1,
+    "4": 1,
+    "3": 1,
+    "2": 1,
+    "0": 1,
+    "1": 1
+  }
+}

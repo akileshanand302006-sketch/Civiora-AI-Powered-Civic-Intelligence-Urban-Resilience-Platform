@@ -3,17 +3,21 @@
 // Spatial Reticle + Multi-Stage AI Neural Scan + Liquid Glass Results
 // ============================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { api } from '../../services/api';
+import { api, API_BASE_URL } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
+import { useLocationStore } from '../../stores/locationStore';
+import { getCurrentBrowserPosition, reverseGeocode } from '../../services/googleMapsService';
 import {
   GlassSurface,
   GlassButton,
   GlassInput,
   StatusPill,
+  GlassHazardDropdown,
 } from '../../design-system/components';
 import { GoogleMapView } from '../../components/map/GoogleMapView';
+import { optimizeImageForUpload } from '../../services/imageCompressionService';
 import {
   ALL_INCIDENT_CATEGORIES,
   INCIDENT_CATEGORY_LABELS,
@@ -25,90 +29,285 @@ type WizardStep = 'capture' | 'ai_scan' | 'details' | 'success';
 
 export const ReportIncidentPage: React.FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
+  const { selectedLocation } = useLocationStore();
 
   const [step, setStep] = useState<WizardStep>('capture');
-  const [category, setCategory] = useState<IncidentCategory>('pothole');
+
+  // Separated Prediction & User Confirmation State (Eliminates Pothole Default Bug)
+  const [predictedCategory, setPredictedCategory] = useState<IncidentCategory | null>(null);
+  const [userConfirmedCategory, setUserConfirmedCategory] = useState<IncidentCategory | null>(null);
+  const [aiConfidence, setAiConfidence] = useState<number | null>(null);
+  const [isAiUncertain, setIsAiUncertain] = useState<boolean>(false);
+  const [aiWarnings, setAiWarnings] = useState<string[]>([]);
+  const uploadSeqRef = useRef<number>(0);
+
+  // Active Category Contract: confirmed selection takes precedence; fallback to AI prediction or unclassified 'other'
+  const effectiveCategory: IncidentCategory = userConfirmedCategory || predictedCategory || 'other';
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isEmergency, setIsEmergency] = useState(false);
-  const [address, setAddress] = useState('Central Avenue & 5th Cross Road, Sector 3');
-  const [coordinates, setCoordinates] = useState<[number, number]>([77.5946, 12.9716]);
+  const [address, setAddress] = useState(
+    selectedLocation?.formattedAddress || 'Tamil Nadu Sector'
+  );
+  const [coordinates, setCoordinates] = useState<[number, number]>([
+    selectedLocation?.longitude || 77.0279,
+    selectedLocation?.latitude || 11.0289,
+  ]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   // Multi-stage AI Pipeline State
   const [aiStage, setAiStage] = useState<number>(0);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
+  const [severityScore, setSeverityScore] = useState<number | null>(null);
+  const [severityReasons, setSeverityReasons] = useState<string[]>([]);
+  const [reviewRequired, setReviewRequired] = useState<boolean>(false);
+  const [aiInferenceId, setAiInferenceId] = useState<string | null>(null);
+  const [detectedBoxes, setDetectedBoxes] = useState<Array<{
+    x_min: number;
+    y_min: number;
+    x_max: number;
+    y_max: number;
+    label: string;
+    confidence: number;
+  }>>([]);
 
   const [loading, setLoading] = useState(false);
   const [createdIncident, setCreatedIncident] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const aiStages = [
-    { label: 'Vision Model Ingestion', desc: 'Decoding EXIF, GPS & high-res image tensor' },
-    { label: 'Object & Hazard Detection', desc: 'Running YOLOv8 segmentation on municipal classes' },
-    { label: 'Spatial & Semantic Correlation', desc: 'Checking DBSCAN radius for duplicate reports' },
-    { label: 'Dynamic Risk & SLA Synthesis', desc: 'Evaluating weather severity and proximity to school zones' },
+    { label: 'YOLO11 Hazard Detection', desc: 'Running YOLO11 compact municipal object detector' },
+    { label: 'PaddleOCR Text Extraction', desc: 'Reading notices, regulatory signboards & emergency markers' },
+    { label: 'Qwen2.5-VL Scene Reasoning', desc: 'Extracting grounded physical narrative & safety risks' },
+    { label: 'CLIP & Damage Segmentation', desc: 'Generating 512-d embeddings & YOLO11-seg surface damage area' },
   ];
 
-  const handleImageFile = (file: File) => {
-    const url = URL.createObjectURL(file);
+  const handleImageFile = async (file: File) => {
+    // 1. Mandatory Clear of Stale AI State on new image selection
+    setAiAnalysis(null);
+    setDetectedBoxes([]);
+    setPredictedCategory(null);
+    setUserConfirmedCategory(null);
+    setAiConfidence(null);
+    setIsAiUncertain(false);
+    setAiWarnings([]);
+    setSeverityScore(null);
+    setSeverityReasons([]);
+    setAiInferenceId(null);
+
+    let targetFile = file;
+    try {
+      const opt = await optimizeImageForUpload(file);
+      targetFile = opt.file;
+    } catch {
+      // Graceful fallback to original file if compression unavailable
+      targetFile = file;
+    }
+    const url = URL.createObjectURL(targetFile);
     setImagePreview(url);
-    startAiScanSequence();
+    startAiScanSequence(targetFile);
   };
 
-  const startAiScanSequence = () => {
+  const startAiScanSequence = async (file?: File) => {
+    // Request Sequence Token to prevent race conditions & late-arriving responses
+    const currentSeq = ++uploadSeqRef.current;
     setStep('ai_scan');
     setAiStage(0);
 
-    // Progress through the 4 AI stages realistically
-    setTimeout(() => setAiStage(1), 700);
-    setTimeout(() => setAiStage(2), 1500);
-    setTimeout(() => setAiStage(3), 2300);
+    const t1 = setTimeout(() => setAiStage(1), 500);
+    const t2 = setTimeout(() => setAiStage(2), 1000);
+    const t3 = setTimeout(() => setAiStage(3), 1500);
+
+    let realResult: any = null;
+    if (file) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('include_ocr', 'true');
+        formData.append('include_qwen', 'true');
+        formData.append('include_clip', 'true');
+        formData.append('include_segmentation', 'true');
+
+        const response = await api.post('/ai/analyze-image', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        if (response.data?.success && response.data?.data) {
+          realResult = response.data.data;
+        }
+      } catch (err) {
+        console.warn('[Civiora AI] Inference service offline or deferred; citizen manual review mode enabled', err);
+      }
+    }
+
+    clearTimeout(t1);
+    clearTimeout(t2);
+    clearTimeout(t3);
+    setAiStage(3);
 
     setTimeout(() => {
+      // Discard response if a newer image has been uploaded
+      if (currentSeq !== uploadSeqRef.current) {
+        return;
+      }
+
+      // Safe normalization against canonical taxonomy
+      const rawCat = (
+        realResult?.suggested_category ||
+        realResult?.primary_category ||
+        realResult?.primary_synthesis?.suggested_category
+      );
+
+      let canonicalCat: IncidentCategory = 'other';
+      if (rawCat && ALL_INCIDENT_CATEGORIES.includes(rawCat as IncidentCategory)) {
+        canonicalCat = rawCat as IncidentCategory;
+      } else if (rawCat === 'garbage') {
+        canonicalCat = 'garbage_accumulation';
+      } else if (rawCat === 'road_crack') {
+        canonicalCat = 'road_damage';
+      } else if (rawCat === 'drainage_obstruction') {
+        canonicalCat = 'drainage_blockage';
+      } else if (rawCat === 'damaged_streetlight') {
+        canonicalCat = 'broken_streetlight';
+      } else if (rawCat === 'damaged_traffic_sign') {
+        canonicalCat = 'damaged_traffic_signal';
+      } else if (rawCat === 'water_leak') {
+        canonicalCat = 'water_leakage';
+      }
+
+      // Real confidence extraction — strictly NO artificial 0.94 fallback
+      const rawConf: number | null = typeof realResult?.overall_confidence === 'number'
+        ? realResult.overall_confidence
+        : (typeof realResult?.primary_synthesis?.confidence === 'number'
+          ? realResult.primary_synthesis.confidence
+          : null);
+
+      const isUncertainFlag = Boolean(
+        realResult?.uncertain ||
+        canonicalCat === 'other' ||
+        (rawConf !== null && rawConf < 0.40) ||
+        !realResult
+      );
+
+      // Real bounding box extraction — strictly NO fabricated demo boxes
+      const yoloDetections: any[] = realResult?.stages?.detector_yolo11?.detections || [];
+      const realBoxes = yoloDetections.map((d: any) => ({
+        x_min: Math.max(0, Math.min(1, d.box?.x_min ?? 0)),
+        y_min: Math.max(0, Math.min(1, d.box?.y_min ?? 0)),
+        x_max: Math.max(0, Math.min(1, d.box?.x_max ?? 1)),
+        y_max: Math.max(0, Math.min(1, d.box?.y_max ?? 1)),
+        label: d.canonical_category || d.raw_label || canonicalCat,
+        confidence: typeof d.confidence === 'number' ? d.confidence : (rawConf ?? 0),
+      }));
+
+      const qwenDesc = realResult?.stages?.qwen2_5_vl?.structured_output?.image_description;
+      const ocrText = realResult?.stages?.ocr_text?.full_text;
+      const detectedObjs = yoloDetections.map((d: any) => d.canonical_category || d.raw_label);
+
+      setPredictedCategory(canonicalCat);
+      setUserConfirmedCategory((prev) => prev || (canonicalCat !== 'other' ? canonicalCat : null));
+      setAiConfidence(rawConf);
+      setIsAiUncertain(isUncertainFlag);
+      setDetectedBoxes(realBoxes);
+
+      const sevAssessment = realResult?.severity_assessment || realResult?.primary_synthesis?.severity_assessment;
+      const score = realResult?.severity_score ?? sevAssessment?.score ?? (isUncertainFlag ? 25 : 55);
+      const reasons = realResult?.review_reasons ?? sevAssessment?.reasons ?? (
+        isUncertainFlag
+          ? ['Visual sensor confidence below verified threshold', 'Requires citizen category confirmation']
+          : [`Identified ${INCIDENT_CATEGORY_LABELS[canonicalCat] || canonicalCat} hazard`, 'Surface geometry verified across visual sensor pipeline']
+      );
+
+      setSeverityScore(score);
+      setSeverityReasons(reasons);
+      setReviewRequired(realResult?.human_review_required ?? isUncertainFlag);
+      setAiInferenceId(realResult?.saved_inference_id ?? null);
+      setAiWarnings(realResult?.warnings ?? (isUncertainFlag ? ['AI model could not confidently identify this image. Please review and confirm the category.'] : []));
+
       setAiAnalysis({
-        category: category,
-        confidence: 0.96,
-        severity: isEmergency ? 'critical' : 'high',
-        detectedObjects: [
-          category.replace(/_/g, ' '),
-          'asphalt surface breach',
-          'roadway lane hazard',
-        ],
+        category: canonicalCat,
+        confidence: rawConf ?? 0.0,
+        severity: (realResult?.recommended_severity as any) || (isEmergency ? 'critical' : isUncertainFlag ? 'low' : 'medium'),
+        detectedObjects: detectedObjs.length > 0 ? detectedObjs : (canonicalCat !== 'other' ? [canonicalCat] : []),
         nlpExtraction: {
-          category,
-          issue: title || 'Deep roadway degradation requiring hot-mix asphalt patching',
-          severity: isEmergency ? 'critical' : 'high',
-          impact: 'Vehicular suspension hazard and pedestrian risk',
-          potentialRisk: 'Accident escalation during night transit',
+          category: canonicalCat,
+          issue: qwenDesc || (isUncertainFlag ? 'Unclassified scene requiring citizen verification' : `Detected ${INCIDENT_CATEGORY_LABELS[canonicalCat] || canonicalCat}`),
+          severity: (realResult?.recommended_severity as any) || (isEmergency ? 'critical' : isUncertainFlag ? 'low' : 'medium'),
+          impact: ocrText ? `Notice: ${ocrText}` : (isUncertainFlag ? 'Visual triage awaiting manual inspection' : 'Surface hazard affecting transit corridor'),
+          potentialRisk: realResult?.stages?.qwen2_5_vl?.structured_output?.potential_obstruction_or_safety_concerns?.[0] || 'Requires municipal field triage',
         },
         processedAt: new Date().toISOString(),
-        modelVersion: 'CivicPulse-Vision-v2.6-Spatial',
+        modelVersion: realResult?.model_version || 'Civiora-YOLO11-Multimodal-v1.0',
       });
-      setTitle((prev) => prev || `Reported ${INCIDENT_CATEGORY_LABELS[category] || category}`);
-      setDescription(
-        (prev) =>
-          prev ||
-          `Detected hazard requiring prompt municipal triage. Autonomous AI vision confirms 96% confidence.`
-      );
+
+      if (qwenDesc) {
+        setDescription(qwenDesc);
+      } else if (!isUncertainFlag) {
+        setDescription((prev) => prev || `Identified ${INCIDENT_CATEGORY_LABELS[canonicalCat] || canonicalCat} requiring prompt municipal triage.`);
+      }
+
+      if (!isUncertainFlag && canonicalCat !== 'other') {
+        setTitle((prev) => prev || `Reported ${INCIDENT_CATEGORY_LABELS[canonicalCat] || canonicalCat}`);
+      } else {
+        setTitle((prev) => prev || 'Civic Hazard Inspection');
+      }
+
       setStep('details');
-    }, 3200);
+    }, 600);
   };
 
-  const handleGetLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setCoordinates([pos.coords.longitude, pos.coords.latitude]);
-          setAddress(`GPS: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`);
-        },
-        () => {
-          setCoordinates([77.5946, 12.9716]);
-        }
-      );
+  const handleGetLocation = async () => {
+    try {
+      const pos = await getCurrentBrowserPosition();
+      setCoordinates([pos.longitude, pos.latitude]);
+      const rev = await reverseGeocode(pos.latitude, pos.longitude);
+      setAddress(rev.formattedAddress);
+    } catch (err: any) {
+      console.warn('[Civiora Report] GPS location note:', err);
+      alert(err.userMessage || err.message || 'GPS location unavailable. Please select your position on the map.');
     }
   };
+
+
+  const userDisplayName = (user as any)?.profile?.firstName
+    ? `${(user as any).profile.firstName} ${(user as any).profile.lastName || ''}`.trim()
+    : (user as any)?.name || '';
+
+  const [reporterName, setReporterName] = useState(userDisplayName);
+  const [reporterEmail, setReporterEmail] = useState(user?.email || '');
+  const [reporterPhone, setReporterPhone] = useState('');
+  const [additionalMessage, setAdditionalMessage] = useState('');
+  const [consentToShareContact, setConsentToShareContact] = useState(true);
+
+  // Dispatch status state
+  const [dispatchLoading, setDispatchLoading] = useState(false);
+  const [dispatchResult, setDispatchResult] = useState<{
+    success: boolean;
+    status: 'sent' | 'simulated' | 'failed';
+    recipient?: string;
+    messageId?: string;
+    pdfSizeBytes?: number;
+    message?: string;
+    timestamp?: string;
+    error?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      if (!reporterName) {
+        setReporterName(
+          (user as any)?.profile?.firstName
+            ? `${(user as any).profile.firstName} ${(user as any).profile.lastName || ''}`.trim()
+            : (user as any)?.name || ''
+        );
+      }
+      if (!reporterEmail && user.email) {
+        setReporterEmail(user.email);
+      }
+    }
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,8 +320,9 @@ export const ReportIncidentPage: React.FC = () => {
     setLoading(true);
 
     try {
+      // 1. Create and persist incident in MongoDB Atlas
       const res = await api.post('/incidents', {
-        category,
+        category: effectiveCategory,
         title,
         description,
         isEmergency,
@@ -131,9 +331,71 @@ export const ReportIncidentPage: React.FC = () => {
           address,
         },
         reportingMode: isEmergency ? 'emergency' : 'standard',
+        ai: aiAnalysis ? {
+          category: aiAnalysis.category,
+          confidence: aiAnalysis.confidence,
+          severity: aiAnalysis.severity,
+          detectedObjects: aiAnalysis.detectedObjects,
+          boundingBoxes: detectedBoxes.map((b) => ({
+            x: b.x_min,
+            y: b.y_min,
+            w: Math.max(0.01, b.x_max - b.x_min),
+            h: Math.max(0.01, b.y_max - b.y_min),
+            label: b.label,
+          })),
+          nlpExtraction: aiAnalysis.nlpExtraction,
+          processedAt: aiAnalysis.processedAt,
+          modelVersion: aiAnalysis.modelVersion,
+        } : undefined,
+        aiInferenceId: aiInferenceId || undefined,
+        severityScore: severityScore !== null ? severityScore : undefined,
       });
 
-      setCreatedIncident(res.data.data);
+      const incidentData = res.data.data;
+      setCreatedIncident(incidentData);
+
+      // 2. Immediate One-Click Municipal Dispatch (PDF Generation + Resend Email)
+      setDispatchLoading(true);
+      try {
+        const dispatchRes = await api.post(`/incidents/${incidentData._id}/dispatch`, {
+          name: reporterName.trim() || userDisplayName,
+          email: reporterEmail.trim() || user?.email,
+          phone: reporterPhone.trim() || undefined,
+          additionalMessage: additionalMessage.trim() || undefined,
+          consent: consentToShareContact,
+          idempotencyKey: `disp-${incidentData._id}-${Date.now()}`,
+        });
+
+        if (dispatchRes.data.success) {
+          setDispatchResult({
+            success: true,
+            status: dispatchRes.data.status,
+            recipient: dispatchRes.data.recipient,
+            messageId: dispatchRes.data.messageId,
+            pdfSizeBytes: dispatchRes.data.pdfSizeBytes,
+            message: dispatchRes.data.message,
+            timestamp: dispatchRes.data.timestamp,
+          });
+        } else {
+          setDispatchResult({
+            success: false,
+            status: 'failed',
+            recipient: dispatchRes.data.recipient,
+            message: dispatchRes.data.message,
+            error: dispatchRes.data.error || dispatchRes.data.message || 'Municipal dispatch delivery pending.',
+          });
+        }
+      } catch (dispErr: any) {
+        console.warn('[Dispatch] Server dispatch error:', dispErr);
+        setDispatchResult({
+          success: false,
+          status: 'failed',
+          error: dispErr.response?.data?.error?.message || dispErr.message || 'Dispatch delivery issue',
+        });
+      } finally {
+        setDispatchLoading(false);
+      }
+
       setStep('success');
     } catch (err: any) {
       const msg = err.response?.data?.error?.message || 'Failed to submit report. Please retry.';
@@ -143,12 +405,79 @@ export const ReportIncidentPage: React.FC = () => {
     }
   };
 
+  const handleRetryDispatch = async () => {
+    if (!createdIncident?._id || dispatchLoading) return;
+    setDispatchLoading(true);
+    try {
+      const dispatchRes = await api.post(`/incidents/${createdIncident._id}/dispatch`, {
+        name: reporterName.trim() || userDisplayName,
+        email: reporterEmail.trim() || user?.email,
+        phone: reporterPhone.trim() || undefined,
+        additionalMessage: additionalMessage.trim() || undefined,
+        consent: consentToShareContact,
+        idempotencyKey: `disp-retry-${createdIncident._id}-${Date.now()}`,
+      });
+
+      if (dispatchRes.data.success) {
+        setDispatchResult({
+          success: true,
+          status: dispatchRes.data.status,
+          recipient: dispatchRes.data.recipient,
+          messageId: dispatchRes.data.messageId,
+          pdfSizeBytes: dispatchRes.data.pdfSizeBytes,
+          message: dispatchRes.data.message,
+          timestamp: dispatchRes.data.timestamp,
+        });
+      } else {
+        setDispatchResult({
+          success: false,
+          status: 'failed',
+          recipient: dispatchRes.data.recipient,
+          message: dispatchRes.data.message,
+          error: dispatchRes.data.error || dispatchRes.data.message || 'Dispatch retry pending.',
+        });
+      }
+    } catch (dispErr: any) {
+      setDispatchResult({
+        success: false,
+        status: 'failed',
+        error: dispErr.response?.data?.error?.message || dispErr.message || 'Dispatch retry failed',
+      });
+    } finally {
+      setDispatchLoading(false);
+    }
+  };
+
+  const handleDownloadPdf = () => {
+    if (!createdIncident?._id) return;
+    window.open(`${API_BASE_URL}/incidents/${createdIncident._id}/report.pdf`, '_blank');
+  };
+
+  const handleExportJson = () => {
+    if (!createdIncident?._id) return;
+    window.open(`${API_BASE_URL}/incidents/${createdIncident._id}/report/export?format=json`, '_blank');
+  };
+
+  const handleExportCsv = () => {
+    if (!createdIncident?._id) return;
+    window.open(`${API_BASE_URL}/incidents/${createdIncident._id}/report/export?format=csv`, '_blank');
+  };
+
+  const handleExportTxt = () => {
+    if (!createdIncident?._id) return;
+    window.open(`${API_BASE_URL}/incidents/${createdIncident._id}/report/export?format=txt`, '_blank');
+  };
+
+  const handlePrintReport = () => {
+    window.print();
+  };
+
   return (
     <div className="container py-4 py-lg-5">
       <div className="row justify-content-center">
         <div className="col-12 col-lg-9">
           {/* Spatial Progress Pill Bar */}
-          <div className="d-flex align-items-center justify-content-between mb-4">
+          <div className="d-flex flex-column flex-sm-row align-items-start align-items-sm-center justify-content-between gap-3 mb-4">
             <div>
               <span className="text-uppercase small fw-semibold" style={{ color: '#64D2FF' }}>
                 CITIZEN INTELLIGENCE PORTAL
@@ -157,32 +486,36 @@ export const ReportIncidentPage: React.FC = () => {
                 Report an Urban Hazard
               </h3>
             </div>
-            <div className="d-flex align-items-center gap-2">
+            <div className="d-flex flex-wrap align-items-center gap-1 gap-sm-2">
               <span
-                className={`badge rounded-pill px-3 py-2 ${
+                className={`badge rounded-pill px-2 px-sm-3 py-1 py-sm-2 ${
                   step === 'capture' ? 'bg-primary' : 'bg-secondary bg-opacity-25'
                 }`}
+                style={{ fontSize: '0.78rem' }}
               >
                 1. Capture
               </span>
               <span
-                className={`badge rounded-pill px-3 py-2 ${
+                className={`badge rounded-pill px-2 px-sm-3 py-1 py-sm-2 ${
                   step === 'ai_scan' ? 'bg-primary' : 'bg-secondary bg-opacity-25'
                 }`}
+                style={{ fontSize: '0.78rem' }}
               >
                 2. AI Scan
               </span>
               <span
-                className={`badge rounded-pill px-3 py-2 ${
+                className={`badge rounded-pill px-2 px-sm-3 py-1 py-sm-2 ${
                   step === 'details' ? 'bg-primary' : 'bg-secondary bg-opacity-25'
                 }`}
+                style={{ fontSize: '0.78rem' }}
               >
                 3. Triage
               </span>
               <span
-                className={`badge rounded-pill px-3 py-2 ${
+                className={`badge rounded-pill px-2 px-sm-3 py-1 py-sm-2 ${
                   step === 'success' ? 'bg-success' : 'bg-secondary bg-opacity-25'
                 }`}
+                style={{ fontSize: '0.78rem' }}
               >
                 4. Dispatch
               </span>
@@ -191,12 +524,13 @@ export const ReportIncidentPage: React.FC = () => {
 
           {/* ── STEP 1: CINEMATIC CAMERA / UPLOAD VIEWPORT ─────── */}
           {step === 'capture' && (
-            <GlassSurface tier="ultra" depth="3d" glow className="p-4 p-md-5 text-center">
+            <GlassSurface tier="ultra" depth="3d" glow className="p-3 p-sm-4 p-md-5 text-center">
               <div
                 className="position-relative mx-auto mb-4 d-flex flex-column align-items-center justify-content-center overflow-hidden"
                 style={{
                   maxWidth: '520px',
-                  height: '340px',
+                  width: '100%',
+                  height: 'clamp(240px, 38vh, 340px)',
                   borderRadius: '24px',
                   background: 'rgba(10, 14, 23, 0.75)',
                   border: '2px dashed rgba(100, 210, 255, 0.4)',
@@ -288,7 +622,8 @@ export const ReportIncidentPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setCategory('pothole');
+                    setUserConfirmedCategory('pothole');
+                    setPredictedCategory('pothole');
                     startAiScanSequence();
                   }}
                   className="btn btn-sm btn-outline-secondary rounded-pill"
@@ -298,7 +633,8 @@ export const ReportIncidentPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setCategory('flooding');
+                    setUserConfirmedCategory('flooding');
+                    setPredictedCategory('flooding');
                     startAiScanSequence();
                   }}
                   className="btn btn-sm btn-outline-secondary rounded-pill"
@@ -308,7 +644,8 @@ export const ReportIncidentPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setCategory('broken_streetlight');
+                    setUserConfirmedCategory('broken_streetlight');
+                    setPredictedCategory('broken_streetlight');
                     startAiScanSequence();
                   }}
                   className="btn btn-sm btn-outline-secondary rounded-pill"
@@ -318,7 +655,8 @@ export const ReportIncidentPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setCategory('garbage_accumulation');
+                    setUserConfirmedCategory('garbage_accumulation');
+                    setPredictedCategory('garbage_accumulation');
                     startAiScanSequence();
                   }}
                   className="btn btn-sm btn-outline-secondary rounded-pill"
@@ -455,34 +793,218 @@ export const ReportIncidentPage: React.FC = () => {
           {/* ── STEP 3: TRIAGE DETAILS CONFIRMATION ────────────── */}
           {step === 'details' && (
             <GlassSurface tier="ultra" depth="3d" glow className="p-4 p-md-5">
-              {/* Overlaid AI Confidence Banner */}
+              {/* AI Multimodal Evidence & Explainable Severity Assessment Card */}
               {aiAnalysis && (
                 <div
-                  className="p-3 rounded-4 mb-4"
+                  className="p-3 p-md-4 rounded-4 mb-4"
                   style={{
-                    background: 'rgba(10, 132, 255, 0.15)',
-                    border: '1px solid rgba(100, 210, 255, 0.4)',
+                    background: 'rgba(10, 132, 255, 0.08)',
+                    border: '1px solid rgba(100, 210, 255, 0.35)',
+                    backdropFilter: 'blur(16px)',
                   }}
                 >
-                  <div className="d-flex justify-content-between align-items-center mb-1">
+                  {/* Top Bar: Model Badge + Severity Pill */}
+                  <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                     <div className="d-flex align-items-center gap-2">
-                      <i className="bi bi-cpu-fill text-info" />
-                      <span className="small fw-bold text-info">AUTONOMOUS AI INFERENCE RESULT</span>
+                      <span
+                        className="badge d-inline-flex align-items-center gap-1 px-2 py-1"
+                        style={{
+                          background: 'rgba(100, 210, 255, 0.15)',
+                          color: '#64D2FF',
+                          border: '1px solid rgba(100, 210, 255, 0.4)',
+                        }}
+                      >
+                        <i className="bi bi-cpu-fill" /> CIVIORA MULTIMODAL AI
+                      </span>
+                      <span className="small text-secondary font-monospace">
+                        CONFIDENCE: {typeof aiConfidence === 'number' ? `${Math.round(aiConfidence * 100)}%` : 'UNASSESSED'}
+                      </span>
                     </div>
-                    <span className="badge bg-success bg-opacity-25 text-success">
-                      96% CONFIDENCE
+
+                    <div className="d-flex align-items-center gap-2">
+                      {isAiUncertain && (
+                        <span
+                          className="badge px-2 py-1"
+                          style={{
+                            background: 'rgba(255, 159, 10, 0.2)',
+                            color: '#FF9F0A',
+                            border: '1px solid rgba(255, 159, 10, 0.4)',
+                          }}
+                        >
+                          <i className="bi bi-question-diamond-fill me-1" /> UNCERTAIN / CONFIRMATION REQUIRED
+                        </span>
+                      )}
+                      {reviewRequired && !isAiUncertain && (
+                        <span
+                          className="badge px-2 py-1"
+                          style={{
+                            background: 'rgba(255, 159, 10, 0.2)',
+                            color: '#FF9F0A',
+                            border: '1px solid rgba(255, 159, 10, 0.4)',
+                          }}
+                        >
+                          <i className="bi bi-exclamation-triangle-fill me-1" /> HUMAN REVIEW ADVISORY
+                        </span>
+                      )}
+                      <span
+                        className="badge px-3 py-2 fw-bold text-uppercase"
+                        style={{
+                          background:
+                            (severityScore || 0) >= 80 || aiAnalysis.severity === 'critical'
+                              ? 'rgba(255, 69, 58, 0.25)'
+                              : (severityScore || 0) >= 60 || aiAnalysis.severity === 'high'
+                              ? 'rgba(255, 159, 10, 0.25)'
+                              : (severityScore || 0) >= 35 || aiAnalysis.severity === 'medium'
+                              ? 'rgba(255, 214, 10, 0.25)'
+                              : 'rgba(48, 209, 88, 0.25)',
+                          color:
+                            (severityScore || 0) >= 80 || aiAnalysis.severity === 'critical'
+                              ? '#FF453A'
+                              : (severityScore || 0) >= 60 || aiAnalysis.severity === 'high'
+                              ? '#FF9F0A'
+                              : (severityScore || 0) >= 35 || aiAnalysis.severity === 'medium'
+                              ? '#FFD60A'
+                              : '#30D158',
+                          border: '1px solid currentColor',
+                        }}
+                      >
+                        SEVERITY SCORE: {severityScore ?? (isAiUncertain ? 25 : 65)}/100 • {aiAnalysis.severity?.toUpperCase() || 'MEDIUM'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Two column: Photo with Bounding Boxes on left, Explainable Severity Engine on right */}
+                  <div className="row g-3 align-items-start mb-3">
+                    {imagePreview && (
+                      <div className="col-12 col-md-5">
+                        <div
+                          className="position-relative overflow-hidden rounded-3 shadow-sm"
+                          style={{
+                            height: '180px',
+                            background: `url(${imagePreview}) center/cover no-repeat`,
+                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                          }}
+                        >
+                          {/* Render True Bounding Boxes Only */}
+                          {detectedBoxes.length > 0 ? (
+                            detectedBoxes.map((b, idx) => (
+                              <div
+                                key={idx}
+                                style={{
+                                  position: 'absolute',
+                                  left: `${Math.round(b.x_min * 100)}%`,
+                                  top: `${Math.round(b.y_min * 100)}%`,
+                                  width: `${Math.max(12, Math.round((b.x_max - b.x_min) * 100))}%`,
+                                  height: `${Math.max(12, Math.round((b.y_max - b.y_min) * 100))}%`,
+                                  border: '2px solid #30D158',
+                                  backgroundColor: 'rgba(48, 209, 88, 0.15)',
+                                  borderRadius: '4px',
+                                  pointerEvents: 'none',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    position: 'absolute',
+                                    top: '-18px',
+                                    left: 0,
+                                    background: '#30D158',
+                                    color: '#000',
+                                    fontSize: '0.65rem',
+                                    fontWeight: 'bold',
+                                    padding: '1px 5px',
+                                    borderRadius: '3px',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {INCIDENT_CATEGORY_LABELS[b.label as IncidentCategory] || b.label} ({Math.round(b.confidence * 100)}%)
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <div
+                              className="position-absolute bottom-0 start-0 end-0 p-2 text-center"
+                              style={{
+                                background: 'rgba(8, 19, 38, 0.88)',
+                                color: '#9FC9FF',
+                                fontSize: '0.72rem',
+                                borderTop: '1px solid rgba(100, 210, 255, 0.2)',
+                              }}
+                            >
+                              <i className="bi bi-bounding-box me-1" />
+                              Scene-level analysis applied • No discrete bounding boxes detected
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-center mt-1 text-secondary" style={{ fontSize: '0.7rem' }}>
+                          Spatial Reticle & YOLO11 Bounding Boxes
+                        </div>
+                      </div>
+                    )}
+
+                    <div className={imagePreview ? "col-12 col-md-7" : "col-12"}>
+                      <div className="small fw-semibold text-info mb-1">
+                        Explainable Severity Factors:
+                      </div>
+                      <div className="d-flex flex-column gap-1 mb-2">
+                        {severityReasons.map((reason, idx) => (
+                          <div
+                            key={idx}
+                            className="small d-flex align-items-center gap-2"
+                            style={{ color: 'var(--cp-text-secondary)', fontSize: '0.8rem' }}
+                          >
+                            <i className="bi bi-shield-check text-success" />
+                            <span>{reason}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="small fw-semibold text-secondary mb-1">
+                        Physical Scene Context:
+                      </div>
+                      <p
+                        className="small mb-0"
+                        style={{ color: 'var(--cp-text-primary)', fontSize: '0.82rem', lineHeight: '1.3' }}
+                      >
+                        {aiAnalysis.nlpExtraction?.issue || aiAnalysis.nlpExtraction?.impact}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Citizen Confirmation Note */}
+                  <div
+                    className="p-2.5 px-3 rounded-3 d-flex flex-wrap align-items-center justify-content-between gap-2"
+                    style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)' }}
+                  >
+                    <span className="small text-secondary" style={{ fontSize: '0.78rem' }}>
+                      Suggested Category:{' '}
+                      <strong className="text-light">
+                        {predictedCategory ? (INCIDENT_CATEGORY_LABELS[predictedCategory] || predictedCategory) : 'None (Unclassified)'}
+                      </strong>
+                      . Citizen Confirmed:{' '}
+                      <strong className="text-info">
+                        {INCIDENT_CATEGORY_LABELS[effectiveCategory] || effectiveCategory}
+                      </strong>
+                    </span>
+                    <span className="badge bg-secondary bg-opacity-25 text-info" style={{ fontSize: '0.7rem' }}>
+                      Citizen editable
                     </span>
                   </div>
-                  <p className="small text-secondary mb-2" style={{ fontSize: '0.85rem' }}>
-                    {aiAnalysis.nlpExtraction?.impact}
-                  </p>
-                  <div className="d-flex flex-wrap gap-2">
-                    {aiAnalysis.detectedObjects?.map((obj) => (
-                      <span key={obj} className="badge bg-secondary bg-opacity-25 text-light small">
-                        ✓ {obj}
-                      </span>
-                    ))}
-                  </div>
+
+                  {/* AI Uncertainty & Field Triage Warnings */}
+                  {aiWarnings.length > 0 && (
+                    <div
+                      className="mt-2 p-2 px-3 rounded-3 d-flex align-items-center gap-2"
+                      style={{
+                        background: 'rgba(255, 159, 10, 0.12)',
+                        border: '1px solid rgba(255, 159, 10, 0.3)',
+                        color: '#FF9F0A',
+                        fontSize: '0.78rem',
+                      }}
+                    >
+                      <i className="bi bi-exclamation-triangle-fill flex-shrink-0" />
+                      <span>{aiWarnings.join(' • ')}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -496,25 +1018,15 @@ export const ReportIncidentPage: React.FC = () => {
               <form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
                 <div className="row g-3">
                   <div className="col-12 col-md-6">
-                    <label className="form-label small fw-semibold text-secondary">
-                      Hazard Classification:
-                    </label>
-                    <select
-                      className="form-select"
-                      style={{
-                        background: 'var(--cp-glass-bg)',
-                        color: 'var(--cp-text-primary)',
-                        borderColor: 'var(--cp-glass-border)',
-                      }}
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value as IncidentCategory)}
-                    >
-                      {ALL_INCIDENT_CATEGORIES.map((c) => (
-                        <option key={c} value={c}>
-                          {INCIDENT_CATEGORY_LABELS[c] || c}
-                        </option>
-                      ))}
-                    </select>
+                    <GlassHazardDropdown
+                      value={effectiveCategory}
+                      onChange={(newCat) => setUserConfirmedCategory(newCat)}
+                      predictedCategory={predictedCategory}
+                      aiConfidence={aiConfidence}
+                      isUncertain={isAiUncertain}
+                      label="Hazard Classification:"
+                      helperText="Confirm or calibrate the exact municipal hazard classification."
+                    />
                   </div>
 
                   <div className="col-12 col-md-6">
@@ -572,7 +1084,7 @@ export const ReportIncidentPage: React.FC = () => {
                   </label>
                   <div
                     style={{
-                      height: '240px',
+                      height: '280px',
                       borderRadius: '16px',
                       overflow: 'hidden',
                       border: '1px solid var(--cp-glass-border)',
@@ -587,12 +1099,13 @@ export const ReportIncidentPage: React.FC = () => {
                         setCoordinates([loc.longitude, loc.latitude]);
                         setAddress(loc.formattedAddress);
                       }}
-                      showSearchBar={false}
+                      showSearchBar={true}
                     />
                   </div>
                 </div>
 
-                <div className="row g-2 align-items-end">
+
+                <div className="row g-2 align-items-end mb-3">
                   <div className="col-12 col-md-9">
                     <GlassInput
                       label="Municipal Address / Sector"
@@ -615,71 +1128,349 @@ export const ReportIncidentPage: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Reporter Contact & Municipal Dispatch Coordination */}
+                <div
+                  className="p-3.5 rounded-4 mb-3"
+                  style={{
+                    background: 'rgba(11, 19, 33, 0.72)',
+                    border: '1px solid rgba(159, 201, 255, 0.22)',
+                  }}
+                >
+                  <div className="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+                    <div className="d-flex align-items-center gap-2">
+                      <div
+                        className="d-flex align-items-center justify-content-center rounded-circle"
+                        style={{ width: '28px', height: '28px', background: 'rgba(10, 132, 255, 0.2)', color: '#9FC9FF' }}
+                      >
+                        <i className="bi bi-shield-check" />
+                      </div>
+                      <span className="fw-bold text-white small">Reporter Details &amp; Municipal Command Dispatch</span>
+                    </div>
+                    <span className="badge rounded-pill bg-primary bg-opacity-20 text-info border border-info border-opacity-30 small">
+                      <i className="bi bi-file-earmark-pdf me-1" />
+                      Auto-Generated PDF Dossier Attached
+                    </span>
+                  </div>
+
+                  <div className="row g-2.5">
+                    <div className="col-12 col-md-6">
+                      <GlassInput
+                        label="Reporter Full Name *"
+                        required
+                        icon="person"
+                        value={reporterName}
+                        onChange={(e) => setReporterName(e.target.value)}
+                        placeholder="e.g. Anandha Kumar"
+                      />
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <GlassInput
+                        type="email"
+                        label="Reporter Email Address *"
+                        required
+                        icon="envelope"
+                        value={reporterEmail}
+                        onChange={(e) => setReporterEmail(e.target.value)}
+                        placeholder="e.g. anand@civicpulse.org"
+                      />
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <GlassInput
+                        type="tel"
+                        label="Contact Phone (Optional)"
+                        icon="telephone"
+                        value={reporterPhone}
+                        onChange={(e) => setReporterPhone(e.target.value)}
+                        placeholder="e.g. +91 98765 43210"
+                      />
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <div className="d-flex flex-column gap-1">
+                        <label className="form-label mb-0" style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--cp-text-secondary)' }}>
+                          Target Municipal Command Desk
+                        </label>
+                        <div
+                          className="glass-input d-flex align-items-center px-3 text-secondary small"
+                          style={{ height: '42px', background: 'rgba(0,0,0,0.25)', borderRadius: '10px' }}
+                        >
+                          <i className="bi bi-building me-2 text-primary" />
+                          <span className="text-light text-truncate">
+                            Civic Operations ({address.split(',')[0] || 'Tamil Nadu Command'})
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-12">
+                      <div className="d-flex flex-column gap-1">
+                        <label
+                          htmlFor="reporter-additional-msg"
+                          className="form-label mb-0"
+                          style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--cp-text-secondary)' }}
+                        >
+                          Additional Message for Municipal Officer (Optional)
+                        </label>
+                        <textarea
+                          id="reporter-additional-msg"
+                          rows={2}
+                          className="glass-input w-100"
+                          placeholder="e.g. Heavy peak-hour school traffic nearby. Please escalate for immediate repair."
+                          value={additionalMessage}
+                          onChange={(e) => setAdditionalMessage(e.target.value)}
+                          style={{
+                            background: 'rgba(10, 20, 36, 0.7)',
+                            color: '#FFFFFF',
+                            borderRadius: '10px',
+                            border: '1px solid rgba(159, 201, 255, 0.25)',
+                            padding: '8px 12px',
+                            fontSize: '0.875rem',
+                            resize: 'vertical',
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="col-12 mt-2">
+                      <div className="form-check d-flex align-items-center gap-2">
+                        <input
+                          id="consent-check"
+                          type="checkbox"
+                          className="form-check-input"
+                          checked={consentToShareContact}
+                          onChange={(e) => setConsentToShareContact(e.target.checked)}
+                          style={{ cursor: 'pointer' }}
+                        />
+                        <label
+                          htmlFor="consent-check"
+                          className="form-check-label small text-secondary"
+                          style={{ cursor: 'pointer', fontSize: '0.82rem' }}
+                        >
+                          Authorize inclusion of my contact information in the official municipal PDF report dossier.
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-secondary border-opacity-25">
                   <button
                     type="button"
                     onClick={() => setStep('capture')}
-                    className="btn btn-link text-secondary"
+                    className="btn btn-link text-secondary text-decoration-none"
                   >
                     ← Retake Photo
                   </button>
-                  <GlassButton variant="primary" size="lg" type="submit" loading={loading}>
-                    Submit to Municipal Command
+                  <GlassButton
+                    variant="primary"
+                    size="lg"
+                    type="submit"
+                    loading={loading || dispatchLoading}
+                    icon="send-fill"
+                  >
+                    {loading
+                      ? 'Saving Incident...'
+                      : dispatchLoading
+                      ? 'Generating PDF & Dispatching...'
+                      : 'Submit to Municipal Command'}
                   </GlassButton>
                 </div>
               </form>
             </GlassSurface>
           )}
 
-          {/* ── STEP 4: SUCCESS MASTER INCIDENT SUMMARY ────────── */}
+          {/* ── STEP 4: SUCCESS MASTER INCIDENT SUMMARY & EXPORT ── */}
           {step === 'success' && (
             <GlassSurface tier="ultra" depth="3d" glow className="p-4 p-md-5 text-center">
               <div
                 style={{
-                  width: '64px',
-                  height: '64px',
+                  width: '68px',
+                  height: '68px',
                   borderRadius: '50%',
                   background: 'rgba(48, 209, 88, 0.2)',
                   color: '#30D158',
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '2rem',
+                  fontSize: '2.2rem',
                   marginBottom: '1rem',
-                  boxShadow: '0 0 30px rgba(48, 209, 88, 0.4)',
+                  boxShadow: '0 0 35px rgba(48, 209, 88, 0.45)',
                 }}
               >
-                <i className="bi bi-check-lg" />
+                <i className="bi bi-check2-circle" />
               </div>
 
-              <h3 className="fw-bold mb-1">Incident Dispatched to Municipal Grid</h3>
-              <p className="text-secondary small mx-auto mb-4" style={{ maxWidth: '420px' }}>
-                Your report has been verified by the AI engine and routed to the corresponding department work order queue.
+              <h3 className="fw-bold mb-1 text-white">Incident Dispatched to Municipal Grid</h3>
+              <p className="text-secondary small mx-auto mb-4" style={{ maxWidth: '480px', lineHeight: 1.6 }}>
+                Your report has been verified by the AI engine, saved to the statewide municipal database, and routed to the corresponding department work order queue.
               </p>
 
+              {/* Dossier Card */}
               <div
-                className="p-3 rounded-4 mx-auto mb-4 text-start"
+                className="p-3.5 rounded-4 mx-auto mb-4 text-start"
                 style={{
-                  maxWidth: '460px',
-                  background: 'rgba(0, 0, 0, 0.3)',
+                  maxWidth: '560px',
+                  background: 'rgba(0, 0, 0, 0.45)',
                   border: '1px solid var(--cp-glass-border)',
                 }}
               >
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <span className="font-monospace text-primary fw-bold">
-                    {createdIncident?.incidentNumber || 'CP-2026-X8K9'}
-                  </span>
+                <div className="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom border-secondary border-opacity-20">
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="font-monospace text-primary fw-bold fs-6">
+                      {createdIncident?.incidentNumber || 'CP-2026-X8K9'}
+                    </span>
+                    <span className="badge bg-secondary bg-opacity-25 text-light small text-uppercase">
+                      {(createdIncident?.category || effectiveCategory).replace(/_/g, ' ')}
+                    </span>
+                  </div>
                   <StatusPill status="reported" size="sm" />
                 </div>
-                <h6 className="fw-bold mb-1">{createdIncident?.title || title}</h6>
-                <div className="small text-secondary mb-2">{address}</div>
+
+                <h6 className="fw-bold mb-1 text-white">{createdIncident?.title || title}</h6>
+                <div className="small text-secondary mb-3">{address}</div>
+
+                {/* Dispatch Verification Section */}
+                <div
+                  className="p-2.5 rounded-3 mb-3 small"
+                  style={{
+                    background:
+                      dispatchResult?.status === 'failed'
+                        ? 'rgba(239, 68, 68, 0.12)'
+                        : 'rgba(10, 132, 255, 0.1)',
+                    border:
+                      dispatchResult?.status === 'failed'
+                        ? '1px solid rgba(239, 68, 68, 0.3)'
+                        : '1px solid rgba(159, 201, 255, 0.25)',
+                  }}
+                >
+                  <div className="d-flex justify-content-between align-items-center mb-1">
+                    <span className="text-secondary fw-semibold">Municipal Dispatch Status:</span>
+                    {dispatchResult?.status === 'sent' ? (
+                      <span className="badge bg-success bg-opacity-30 text-success fw-bold">
+                        <i className="bi bi-check-circle-fill me-1" />
+                        Transmitted via Resend
+                      </span>
+                    ) : dispatchResult?.status === 'simulated' ? (
+                      <span className="badge bg-info bg-opacity-30 text-info fw-bold">
+                        <i className="bi bi-shield-check me-1" />
+                        Simulated Mode (Dev)
+                      </span>
+                    ) : dispatchResult?.status === 'failed' ? (
+                      <span className="badge bg-danger bg-opacity-30 text-danger fw-bold">
+                        <i className="bi bi-exclamation-triangle-fill me-1" />
+                        Delivery Pending / Retrying
+                      </span>
+                    ) : (
+                      <span className="badge bg-warning bg-opacity-30 text-warning fw-bold">
+                        Processing Dispatch...
+                      </span>
+                    )}
+                  </div>
+
+                  {dispatchResult?.recipient && (
+                    <div className="d-flex justify-content-between align-items-center text-secondary" style={{ fontSize: '0.78rem' }}>
+                      <span>Destination Desk:</span>
+                      <span className="text-light font-monospace">{dispatchResult.recipient}</span>
+                    </div>
+                  )}
+
+                  {dispatchResult?.messageId && (
+                    <div className="d-flex justify-content-between align-items-center text-secondary" style={{ fontSize: '0.78rem' }}>
+                      <span>Provider Message ID:</span>
+                      <span className="text-info font-monospace">{dispatchResult.messageId}</span>
+                    </div>
+                  )}
+
+                  {dispatchResult?.pdfSizeBytes && (
+                    <div className="d-flex justify-content-between align-items-center text-secondary" style={{ fontSize: '0.78rem' }}>
+                      <span>PDF Attachment Size:</span>
+                      <span className="text-light">{Math.round(dispatchResult.pdfSizeBytes / 1024)} KB (Vector Dossier)</span>
+                    </div>
+                  )}
+
+                  {dispatchResult?.status === 'failed' && (
+                    <div className="mt-2 pt-2 border-top border-danger border-opacity-25 d-flex justify-content-between align-items-center">
+                      <span className="text-danger small">{dispatchResult.error || 'Provider communication delayed.'}</span>
+                      <button
+                        type="button"
+                        onClick={handleRetryDispatch}
+                        disabled={dispatchLoading}
+                        className="btn btn-sm btn-outline-danger py-0 px-2"
+                      >
+                        {dispatchLoading ? 'Retrying...' : 'Retry Dispatch'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <div className="d-flex justify-content-between align-items-center pt-2 border-top border-secondary border-opacity-25 small">
                   <span className="text-secondary">Expected SLA Resolution:</span>
                   <span className="fw-bold text-info">Within 4 Hours</span>
                 </div>
               </div>
 
-              <div className="d-flex justify-content-center gap-3">
+              {/* Professional Report Download & Export Toolbar */}
+              <div className="mx-auto mb-4" style={{ maxWidth: '560px' }}>
+                <div className="d-flex align-items-center justify-content-between mb-2 px-1">
+                  <span className="text-secondary small fw-semibold text-uppercase" style={{ letterSpacing: '0.04em', fontSize: '0.72rem' }}>
+                    Authoritative Dossier &amp; Export Options
+                  </span>
+                  <span className="badge bg-secondary bg-opacity-30 text-light" style={{ fontSize: '0.68rem' }}>
+                    Tamper-Resistant Record
+                  </span>
+                </div>
+
+                <div className="d-flex flex-wrap gap-2 justify-content-center">
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    className="btn btn-primary d-inline-flex align-items-center gap-2 px-3 py-2 rounded-3 shadow-sm"
+                    style={{ background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)', border: 'none' }}
+                  >
+                    <i className="bi bi-file-earmark-pdf-fill" />
+                    Download PDF Dossier
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportJson}
+                    className="btn btn-outline-light d-inline-flex align-items-center gap-1.5 px-3 py-2 rounded-3"
+                    style={{ borderColor: 'rgba(159, 201, 255, 0.3)' }}
+                  >
+                    <i className="bi bi-code-square text-info" />
+                    Export JSON
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportCsv}
+                    className="btn btn-outline-light d-inline-flex align-items-center gap-1.5 px-3 py-2 rounded-3"
+                    style={{ borderColor: 'rgba(159, 201, 255, 0.3)' }}
+                  >
+                    <i className="bi bi-file-earmark-spreadsheet text-success" />
+                    Export CSV
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportTxt}
+                    className="btn btn-outline-light d-inline-flex align-items-center gap-1.5 px-3 py-2 rounded-3"
+                    style={{ borderColor: 'rgba(159, 201, 255, 0.3)' }}
+                  >
+                    <i className="bi bi-file-earmark-text text-warning" />
+                    Export TXT
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handlePrintReport}
+                    className="btn btn-outline-secondary d-inline-flex align-items-center gap-1.5 px-3 py-2 rounded-3"
+                  >
+                    <i className="bi bi-printer" />
+                    Print
+                  </button>
+                </div>
+              </div>
+
+              {/* Navigation Actions */}
+              <div className="d-flex justify-content-center gap-3 pt-2">
                 <Link to="/dashboard">
                   <GlassButton variant="primary" size="md" icon="grid-1x2">
                     Open in My Feed

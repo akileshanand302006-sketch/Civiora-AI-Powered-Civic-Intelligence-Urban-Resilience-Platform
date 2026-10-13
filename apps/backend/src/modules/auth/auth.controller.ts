@@ -45,8 +45,14 @@ export async function login(req: Request, res: Response, next: NextFunction) {
       success: true,
       data: {
         mfaRequired: false,
+        requiresMfa: false,
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
+        tokens: {
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+          expiresIn: result.expiresIn,
+        },
         expiresIn: result.expiresIn,
         user: result.user,
       },

@@ -28,6 +28,7 @@ export const LocationSetupPage: React.FC = () => {
     selectedLocation || DEFAULT_CIVIC_LOCATION
   );
   const [isLocating, setIsLocating] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveAsDefault, setSaveAsDefault] = useState(true);
   const [saveLabel, setSaveLabel] = useState('Home / Primary');
@@ -41,17 +42,24 @@ export const LocationSetupPage: React.FC = () => {
   // Method 1: Use Current GPS Location
   const handleUseCurrentGps = async () => {
     setIsLocating(true);
+    setGpsError(null);
     try {
       const pos = await getCurrentBrowserPosition();
       setLocationPermission('granted');
 
       const loc = await reverseGeocode(pos.latitude, pos.longitude);
       loc.accuracy = pos.accuracy;
+      loc.accuracyConfidence = pos.accuracyConfidence;
       loc.source = 'CURRENT_GPS';
+      loc.selectedAt = pos.timestamp || new Date().toISOString();
       setPreviewLocation(loc);
     } catch (err: any) {
       setLocationPermission('denied');
-      alert(err.message || 'Unable to retrieve GPS coordinates. Please select manually on the map.');
+      const msg =
+        err.userMessage ||
+        err.message ||
+        'Unable to retrieve GPS coordinates. Please select manually on the map.';
+      setGpsError(msg);
     } finally {
       setIsLocating(false);
     }
@@ -195,6 +203,31 @@ export const LocationSetupPage: React.FC = () => {
               💡 Click or drag marker on map to relocate
             </span>
           </div>
+
+          {gpsError && (
+            <div
+              className="mt-3 p-3 rounded-3 d-flex align-items-center justify-content-between border animate-fadeIn"
+              style={{
+                background: 'rgba(255, 69, 58, 0.12)',
+                borderColor: 'rgba(255, 69, 58, 0.35)',
+              }}
+            >
+              <div className="d-flex align-items-center gap-2">
+                <i className="bi bi-exclamation-triangle-fill text-danger fs-6" />
+                <span className="small text-white" style={{ fontSize: '0.82rem' }}>
+                  {gpsError}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleUseCurrentGps}
+                className="btn btn-sm btn-outline-danger rounded-pill px-3 py-1"
+                style={{ fontSize: '0.75rem' }}
+              >
+                Retry GPS
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── RIGHT: SELECTED LOCATION PREVIEW & CONFIRMATION ── */}

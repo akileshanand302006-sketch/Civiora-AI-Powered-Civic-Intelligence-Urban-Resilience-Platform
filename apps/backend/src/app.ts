@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import { env } from './config/env.js';
+import { corsOptions } from './config/cors.js';
 import { requestIdMiddleware } from './middleware/requestId.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { apiRateLimiter } from './middleware/rateLimiter.js';
@@ -23,6 +24,8 @@ import locationRoutes from './modules/locations/location.routes.js';
 import operationsRoutes from './modules/operations/operations.routes.js';
 import notificationRoutes from './modules/notifications/notification.routes.js';
 import securityRoutes from './modules/security/security.routes.js';
+import aiRoutes from './modules/ai/ai.routes.js';
+import contactRoutes from './modules/contact/contact.routes.js';
 
 const app = express();
 
@@ -32,15 +35,8 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-// ── CORS ──────────────────────────────────────────────────
-app.use(cors({
-  origin: env.WS_CORS_ORIGIN.split(',').map((o) => o.trim()),
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
-  exposedHeaders: ['X-Request-Id'],
-  maxAge: 86400,
-}));
+// ── CORS (Dynamic origin support for Vercel, Render & Local)
+app.use(cors(corsOptions));
 
 // ── Body Parsing ──────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
@@ -70,7 +66,8 @@ app.use(`/api/${env.API_VERSION}/`, apiRateLimiter);
 // ── Routes ────────────────────────────────────────────────
 const apiPrefix = `/api/${env.API_VERSION}`;
 
-// Health (no auth required, no rate limit)
+// Health (no auth required, no rate limit) — available at /health, /ready, and /api/v1/health
+app.use('/', healthRoutes);
 app.use(apiPrefix, healthRoutes);
 
 // Auth
@@ -82,8 +79,11 @@ app.use(`${apiPrefix}/organizations`, orgRoutes);
 // Users
 app.use(`${apiPrefix}/users`, userRoutes);
 
-// Incidents
+// Incidents & Municipal Reports
 app.use(`${apiPrefix}/incidents`, incidentRoutes);
+app.use(`${apiPrefix}/reports`, incidentRoutes);
+app.use('/api/incidents', incidentRoutes);
+app.use('/api/reports', incidentRoutes);
 
 // Locations & Geospatial Infrastructure
 app.use(`${apiPrefix}/locations`, locationRoutes);
@@ -96,6 +96,13 @@ app.use(`${apiPrefix}/notifications`, notificationRoutes);
 
 // Security Threat & Audit Logs
 app.use(`${apiPrefix}/security`, securityRoutes);
+
+// AI Intelligence Engine (YOLO11, PaddleOCR, Qwen2.5-VL, CLIP, YOLO11-seg)
+app.use(`${apiPrefix}/ai`, aiRoutes);
+
+// Contact Center & Inquiries
+app.use(`${apiPrefix}/contact`, contactRoutes);
+app.use('/api/contact', contactRoutes);
 
 // ── 404 Handler ───────────────────────────────────────────
 app.use((_req, res) => {

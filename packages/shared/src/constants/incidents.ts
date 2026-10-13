@@ -20,6 +20,7 @@ export const INCIDENT_CATEGORIES = {
   TRAFFIC_OBSTRUCTION: 'traffic_obstruction',
   ENVIRONMENTAL_HAZARD: 'environmental_hazard',
   EMERGENCY_INCIDENT: 'emergency_incident',
+  OTHER: 'other',
 } as const;
 
 export type IncidentCategory = (typeof INCIDENT_CATEGORIES)[keyof typeof INCIDENT_CATEGORIES];
@@ -42,6 +43,7 @@ export const INCIDENT_CATEGORY_LABELS: Record<IncidentCategory, string> = {
   traffic_obstruction: 'Traffic Obstruction',
   environmental_hazard: 'Environmental Hazard',
   emergency_incident: 'Emergency Incident',
+  other: 'Other / Unclassified',
 };
 
 export const INCIDENT_CATEGORY_ICONS: Record<IncidentCategory, string> = {
@@ -62,6 +64,7 @@ export const INCIDENT_CATEGORY_ICONS: Record<IncidentCategory, string> = {
   traffic_obstruction: 'bi-cone-striped',
   environmental_hazard: 'bi-radioactive',
   emergency_incident: 'bi-exclamation-triangle',
+  other: 'bi-question-circle',
 };
 
 /** Color coding for incident categories */
@@ -83,6 +86,7 @@ export const INCIDENT_CATEGORY_COLORS: Record<IncidentCategory, string> = {
   traffic_obstruction: '#E64980',
   environmental_hazard: '#20C997',
   emergency_incident: '#FA5252',
+  other: '#868E96',
 };
 
 // ── Statuses ──────────────────────────────────────────────

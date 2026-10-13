@@ -68,10 +68,15 @@ const envSchema = z.object({
   AI_SERVICE_URL: z.string().url().default('http://localhost:8000'),
   AI_SERVICE_KEY: z.string().default('dev-ai-service-key'),
 
-  // Email
-  EMAIL_PROVIDER: z.enum(['resend', 'sendgrid', 'console']).default('console'),
+  // Email & Resend Delivery Provider
+  EMAIL_PROVIDER: z.enum(['resend', 'sendgrid', 'console']).default('resend'),
   EMAIL_API_KEY: z.string().default(''),
-  EMAIL_FROM: z.string().default('noreply@civicpulse.app'),
+  EMAIL_FROM: z.string().default('onboarding@resend.dev'),
+  RESEND_API_KEY: z.string().default(''),
+  RESEND_FROM_EMAIL: z.string().default('onboarding@resend.dev'),
+  MUNICIPAL_RECEIVER_EMAIL: z.string().default('akileshanand302006@gmail.com'),
+  EMAIL_DELIVERY_ENABLED: z.preprocess((val) => val === 'true' || val === true, z.boolean()).default(false),
+  FRONTEND_URL: z.string().url().default('http://localhost:5173'),
 
   // WebSocket
   WS_CORS_ORIGIN: z.string().default('http://localhost:5173'),

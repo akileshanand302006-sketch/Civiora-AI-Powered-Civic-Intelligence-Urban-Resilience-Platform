@@ -36,7 +36,7 @@ export const AuthGateModal: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '1.5rem',
+        padding: '0.75rem',
         animation: 'fadeIn 0.25s ease-out',
       }}
       onClick={closeAuthGate}
@@ -51,7 +51,7 @@ export const AuthGateModal: React.FC = () => {
           glow
           style={{
             borderRadius: '28px',
-            padding: '2.5rem',
+            padding: 'clamp(1.5rem, 5vw, 2.5rem)',
             textAlign: 'center',
             boxShadow: '0 30px 90px rgba(0, 0, 0, 0.8), 0 0 60px rgba(10, 132, 255, 0.3)',
           }}

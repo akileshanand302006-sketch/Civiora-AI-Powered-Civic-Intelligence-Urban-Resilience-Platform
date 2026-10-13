@@ -32,6 +32,8 @@ export const PublicLayout: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [location.pathname]);
 
+  const isFullScreenMap = location.pathname.startsWith('/live-map');
+
   return (
     <div className="d-flex flex-column min-vh-100 position-relative overflow-hidden">
       {/* ── Layer 1-4: Interactive Atmospheric Canvas ─────────── */}
@@ -49,16 +51,20 @@ export const PublicLayout: React.FC = () => {
       <main
         id="main-content-flow"
         className="flex-grow-1 position-relative"
-        style={{ zIndex: 5, paddingTop: '80px', paddingBottom: '90px' }}
+        style={{
+          zIndex: 5,
+          paddingTop: isFullScreenMap ? '64px' : '80px',
+          paddingBottom: isFullScreenMap ? '0px' : '40px',
+        }}
       >
         <Outlet />
       </main>
 
       {/* ── Layer 8: Spatial Floating Dock Navigation ───────── */}
-      <GlassDock />
+      {!isFullScreenMap && <GlassDock />}
 
-      {/* ── Footer ──────────────────────────────────────────── */}
-      <PublicFooter />
+      {/* ── Layer 9: Premium Civiora Spatial Footer ─────────── */}
+      {!isFullScreenMap && <PublicFooter />}
     </div>
   );
 };
