@@ -9,7 +9,11 @@ let socket: Socket | null = null;
 
 export function getSocket(): Socket {
   if (!socket) {
-    const wsUrl = import.meta.env.VITE_WS_URL || window.location.origin;
+    const wsUrl =
+      import.meta.env.VITE_WS_URL ||
+      (import.meta.env.PROD
+        ? 'https://civiora-api-6dij.onrender.com'
+        : window.location.origin);
     const token = localStorage.getItem('cp_access_token');
 
     socket = io(wsUrl, {

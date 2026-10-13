@@ -6,7 +6,11 @@ import axios, { type AxiosRequestConfig } from 'axios';
 
 function resolveApiBaseUrl(): string {
   const envUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
-  if (!envUrl) return '/api/v1';
+  if (!envUrl) {
+    return import.meta.env.PROD
+      ? 'https://civiora-api-6dij.onrender.com/api/v1'
+      : '/api/v1';
+  }
   if (envUrl.endsWith('/api/v1')) return envUrl;
   return `${envUrl}/api/v1`;
 }

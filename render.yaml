@@ -24,9 +24,9 @@ services:
       - key: APP_NAME
         value: Civiora
       - key: APP_URL
-        value: https://civiora.vercel.app
+        value: https://civioraai.vercel.app
       - key: WS_CORS_ORIGIN
-        value: https://civiora.vercel.app,http://localhost:5173
+        value: https://civioraai.vercel.app,http://localhost:5173,http://localhost:5174
       - key: MONGODB_URI
         sync: false
       - key: JWT_ACCESS_SECRET
@@ -52,7 +52,7 @@ services:
       - key: EMAIL_DELIVERY_ENABLED
         value: "true"
       - key: FRONTEND_URL
-        value: https://civiora.vercel.app
+        value: https://civioraai.vercel.app
 
   # ── 2. AI Intelligence Engine (Python 3.11+ / FastAPI) ──
   - type: web
@@ -71,7 +71,7 @@ services:
       - key: PORT
         value: 8000
       - key: CORS_ORIGINS
-        value: https://civiora.vercel.app,http://localhost:5173
+        value: https://civioraai.vercel.app,https://civiora.vercel.app,http://localhost:5173
       - key: AI_API_KEY
         fromService:
           type: web

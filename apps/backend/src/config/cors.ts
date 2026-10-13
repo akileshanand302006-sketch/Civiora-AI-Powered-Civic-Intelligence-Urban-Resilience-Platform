@@ -15,23 +15,31 @@ import { logger } from '../utils/logger.js';
  *  - Local development environments (localhost, 127.0.0.1)
  *  - Server-to-server / health check requests (null / undefined origin)
  */
-export function isAllowedOrigin(origin: string | undefined): boolean {
+export function isAllowedOrigin(rawOrigin: string | undefined): boolean {
   // Allow server-to-server, curl, Postman, Render health checks (no origin header)
-  if (!origin) {
+  if (!rawOrigin) {
     return true;
   }
 
+  // Normalize origin (remove trailing slash and whitespace)
+  const origin = rawOrigin.trim().replace(/\/+$/, '');
+
   // Configured explicit origins from environment
   const explicitOrigins = [
-    ...env.WS_CORS_ORIGIN.split(',').map((o) => o.trim()),
-    env.APP_URL.trim(),
+    'https://civioraai.vercel.app',
+    'https://civiora.vercel.app',
+    'https://civiora-api-6dij.onrender.com',
+    'https://civiora-api.onrender.com',
+    ...env.WS_CORS_ORIGIN.split(',').map((o) => o.trim().replace(/\/+$/, '')),
+    env.APP_URL.trim().replace(/\/+$/, ''),
+    env.FRONTEND_URL.trim().replace(/\/+$/, ''),
   ].filter(Boolean);
 
   if (explicitOrigins.includes(origin)) {
     return true;
   }
 
-  // Local development
+  // Local development (localhost, 127.0.0.1 on any port)
   if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
     return true;
   }
