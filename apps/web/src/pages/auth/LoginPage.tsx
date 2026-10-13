@@ -182,9 +182,18 @@ export const LoginPage: React.FC = () => {
         }
       }, 700);
     } catch (err: any) {
-      const msg =
-        err.response?.data?.error?.message ||
-        'Authentication failed. Please verify credentials.';
+      let msg = err.response?.data?.error?.message;
+      if (!msg) {
+        if (!err.response) {
+          msg = 'Cannot reach backend server. Please verify your backend service is running and CORS is enabled.';
+        } else if (err.response.status === 404) {
+          msg = 'Backend API endpoint not found (404). Ensure VITE_API_URL is configured in your Vercel Environment Variables and redeploy.';
+        } else if (err.response.status === 401) {
+          msg = 'Authentication failed: Invalid email or password. Use demo persona credentials or create a new profile below.';
+        } else {
+          msg = `Server returned status ${err.response.status}. Please check backend logs.`;
+        }
+      }
       setError(msg);
       setLoading(false);
     }
