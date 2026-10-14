@@ -45,6 +45,12 @@ const STATUS_CONFIG: Record<
     border: 'rgba(255, 214, 10, 0.4)',
     pulse: true,
   },
+  work_completed: {
+    bg: 'rgba(191, 90, 242, 0.15)',
+    text: '#BF5AF2',
+    border: 'rgba(191, 90, 242, 0.4)',
+    pulse: true,
+  },
   awaiting_verification: {
     bg: 'rgba(255, 159, 10, 0.15)',
     text: '#FF9F0A',

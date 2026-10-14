@@ -9,6 +9,7 @@ import {
   ALL_INCIDENT_PRIORITIES,
   INCIDENT_STATUSES,
   INCIDENT_PRIORITIES,
+  mapAiCategoryToCanonical,
   type IncidentCategory,
   type IncidentStatus,
   type IncidentPriority,
@@ -283,6 +284,14 @@ const incidentSchema = new Schema<IIncident>(
     },
   },
 );
+
+// Canonicalize category automatically before Mongoose enum validation
+incidentSchema.pre('validate', function (next) {
+  if (this.category) {
+    this.category = mapAiCategoryToCanonical(this.category as any);
+  }
+  next();
+});
 
 // Indexes
 incidentSchema.index({ organizationId: 1, incidentNumber: 1 }, { unique: true });

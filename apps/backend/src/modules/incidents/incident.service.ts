@@ -14,6 +14,7 @@ import {
   INCIDENT_STATUS_TRANSITIONS,
   INCIDENT_PRIORITIES,
   SOCKET_EVENTS,
+  mapAiCategoryToCanonical,
   type IncidentCategory,
   type IncidentStatus,
   type IncidentPriority,
@@ -22,8 +23,10 @@ import {
 import {
   NotFoundError,
   BadRequestError,
+  ValidationError,
   ForbiddenError,
 } from '../../utils/errors.js';
+import { dispatchIncidentLifecycleNotification } from '../notifications/emailNotification.service.js';
 import { emitInngestEvent } from '../../inngest/index.js';
 import {
   emitToOrg,
@@ -191,10 +194,13 @@ export async function createIncident(
     });
   }
 
+  const canonicalCategory = mapAiCategoryToCanonical(data.category);
+  const canonicalAiCategory = mapAiCategoryToCanonical(data.ai?.category || data.category);
+
   const incident = new Incident({
     organizationId: new Types.ObjectId(organizationId),
     incidentNumber,
-    category: data.category,
+    category: canonicalCategory,
     subcategory: data.subcategory,
     title: data.title,
     description: data.description,
@@ -215,13 +221,13 @@ export async function createIncident(
       calculatedAt: new Date(),
     },
     ai: {
-      category: data.ai?.category || data.category,
+      category: canonicalAiCategory,
       confidence: data.ai?.confidence,
       severity: data.ai?.severity || priority,
       detectedObjects: data.ai?.detectedObjects || [],
       boundingBoxes: data.ai?.boundingBoxes,
       nlpExtraction: data.ai?.nlpExtraction || {
-        category: data.category,
+        category: canonicalCategory,
         issue: data.title,
         severity: priority,
         impact: isEmergency ? 'Immediate danger to safety' : 'Municipal inconvenience',
@@ -255,7 +261,7 @@ export async function createIncident(
         details: { mode: data.reportingMode, isEmergency },
       },
     ],
-    tags: [data.category, priority],
+    tags: [canonicalCategory, priority],
   });
 
   await incident.save();
@@ -338,6 +344,13 @@ export async function createIncident(
         });
       }
     }
+    // Trigger automated role notifications via Resend (Field Worker, System Admin, Dept Manager) with PDF dossier
+    dispatchIncidentLifecycleNotification({
+      incident,
+      eventType: 'INCIDENT_REPORTED',
+    }).catch((emailErr) => {
+      logger.warn({ err: emailErr.message }, '[createIncident] Automated lifecycle email notification notice');
+    });
   } catch (notifErr) {
     logger.warn({ err: notifErr }, 'Could not broadcast municipal staff notifications');
   }
@@ -508,10 +521,33 @@ export async function updateIncidentStatus(
     throw new NotFoundError('Incident');
   }
 
+  // Idempotent status check: if requested status matches current status, treat as operational update/note
+  if (incident.status === newStatus) {
+    if (notes) {
+      incident.timeline.push({
+        action: 'OPERATIONAL_NOTE_ADDED',
+        performedBy: new Types.ObjectId(userId),
+        timestamp: new Date(),
+        details: { notes, status: incident.status },
+      });
+      await incident.save();
+      const payload = incident.toJSON();
+      if (incident.organizationId) {
+        emitToOrg(incident.organizationId.toString(), SOCKET_EVENTS.INCIDENT_UPDATED, payload);
+      }
+    }
+    return incident;
+  }
+
   const allowedTransitions = INCIDENT_STATUS_TRANSITIONS[incident.status] || [];
   if (!allowedTransitions.includes(newStatus)) {
-    throw new BadRequestError(
+    throw new ValidationError(
       `Invalid status transition from '${incident.status}' to '${newStatus}'. Allowed: ${allowedTransitions.join(', ')}`,
+      {
+        currentState: incident.status,
+        attemptedState: newStatus,
+        allowedTransitions,
+      }
     );
   }
 
@@ -597,6 +633,14 @@ export async function assignIncident(
     assignedTo: assigneeUserId,
     slaHours: incident.priority === 'critical' ? 2 : incident.priority === 'high' ? 12 : 24,
     assignedAt: new Date().toISOString(),
+  });
+
+  // Trigger automated assignment role notifications via Resend
+  dispatchIncidentLifecycleNotification({
+    incident,
+    eventType: 'INCIDENT_ASSIGNED',
+  }).catch((emailErr) => {
+    logger.warn({ err: emailErr.message }, '[assignIncident] Automated assignment email notification notice');
   });
 
   return incident;

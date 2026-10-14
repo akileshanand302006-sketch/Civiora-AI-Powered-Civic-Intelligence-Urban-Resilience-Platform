@@ -22,6 +22,7 @@ import { emitToOrg } from '../../socket/socketServer.js';
 import { SOCKET_EVENTS, INCIDENT_CATEGORY_LABELS } from '@civicpulse/shared';
 import { BadRequestError, NotFoundError, ForbiddenError } from '../../utils/errors.js';
 import { emitInngestEvent } from '../../inngest/index.js';
+import { dispatchIncidentLifecycleNotification } from '../notifications/emailNotification.service.js';
 
 let resendClient: Resend | null = null;
 function getResendClient(): Resend | null {
@@ -317,6 +318,18 @@ export async function approveResolution(params: {
   }
 
   emitToOrg(String(incident.organizationId), SOCKET_EVENTS.INCIDENT_UPDATED, incident.toJSON());
+
+  // Trigger automated multi-role resolution notifications with PDF attachment
+  dispatchIncidentLifecycleNotification({
+    incident,
+    eventType: 'RESOLUTION_APPROVED',
+    pdfBuffer,
+    pdfFilename: filename,
+    notes: workSession.completionSummary || reviewNotes,
+    actorName: verifierName,
+  }).catch((emailErr) => {
+    logger.warn({ err: emailErr.message }, '[approveResolution] Multi-role resolution email dispatch notice');
+  });
 
   // Trigger Inngest role-based workflow orchestration
   emitInngestEvent('incident/resolved', {

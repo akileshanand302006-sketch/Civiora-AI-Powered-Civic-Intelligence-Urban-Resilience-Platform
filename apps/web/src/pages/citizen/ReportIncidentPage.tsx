@@ -26,6 +26,7 @@ import {
   type ReportFormat,
 } from '@civicpulse/shared';
 import { downloadReportFile } from '../../utils/downloadReport';
+import { toast } from '../../stores/toastStore';
 
 type WizardStep = 'capture' | 'ai_scan' | 'details' | 'success';
 
@@ -568,7 +569,7 @@ export const ReportIncidentPage: React.FC = () => {
       });
     } catch (err: any) {
       console.error('Download error:', err);
-      alert(err.message || 'File download failed. Check connection.');
+      toast.error('Download Failed', err.message || 'File download failed. Check connection.');
     } finally {
       setDownloadingFormat(null);
     }

@@ -10,7 +10,7 @@ import { disconnectRedis } from './config/redis.js';
 import { initSocketServer } from './socket/socketServer.js';
 import { logger } from './utils/logger.js';
 import { User } from './modules/users/user.model.js';
-import { runDatabaseSeed } from './seed/seed.js';
+import { runDatabaseSeed, ensureConfiguredRoleAccounts } from './seed/seed.js';
 
 async function bootstrap(): Promise<void> {
   logger.info(`
@@ -30,6 +30,9 @@ async function bootstrap(): Promise<void> {
       logger.info('🌱 Database has 0 users. Auto-seeding default operational personas...');
       await runDatabaseSeed();
       logger.info('✅ Database auto-seeded successfully.');
+    } else {
+      // Ensure the 3 production role accounts exist
+      await ensureConfiguredRoleAccounts();
     }
   } catch (seedErr) {
     logger.warn({ err: seedErr }, 'Database auto-seed check notice');

@@ -5,7 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import { GlassSurface } from './GlassSurface';
 
-export type NotificationType = 'success' | 'warning' | 'emergency' | 'info';
+export type NotificationType = 'success' | 'error' | 'warning' | 'emergency' | 'info';
 
 export interface NotificationItem {
   id: string;
@@ -21,6 +21,8 @@ export const GlassNotificationCapsule: React.FC<{
 }> = ({ notifications, onDismiss }) => {
   return (
     <div
+      role="region"
+      aria-label="Civiora System Notifications"
       style={{
         position: 'fixed',
         bottom: '24px',
@@ -62,6 +64,12 @@ const NotificationPill: React.FC<{
           icon: 'check-circle-fill',
           color: '#30D158',
           border: 'rgba(48, 209, 88, 0.4)',
+        };
+      case 'error':
+        return {
+          icon: 'x-circle-fill',
+          color: '#FF453A',
+          border: 'rgba(255, 69, 58, 0.5)',
         };
       case 'warning':
         return {

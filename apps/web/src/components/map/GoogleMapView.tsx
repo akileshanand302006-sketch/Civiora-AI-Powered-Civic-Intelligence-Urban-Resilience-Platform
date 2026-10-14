@@ -13,6 +13,7 @@ import {
 } from '../../services/googleMapsService';
 import type { CivicLocation } from '../../stores/locationStore';
 import { GlassSurface } from '../../design-system/components';
+import { toast } from '../../stores/toastStore';
 import {
   TAMIL_NADU_DISTRICTS,
   TAMIL_NADU_STATE_BOUNDS,
@@ -405,7 +406,7 @@ export const GoogleMapView: React.FC<GoogleMapViewProps> = ({
       await handleCoordUpdate(pos.latitude, pos.longitude, pos.accuracy, 'CURRENT_GPS');
     } catch (err: any) {
       console.warn('[Civiora Map] GPS location note:', err);
-      alert(err.userMessage || err.message || 'Unable to retrieve your GPS location.');
+      toast.warning('GPS Location Unavailable', err.userMessage || err.message || 'Unable to retrieve your GPS location.');
     } finally {
       setIsLocating(false);
     }

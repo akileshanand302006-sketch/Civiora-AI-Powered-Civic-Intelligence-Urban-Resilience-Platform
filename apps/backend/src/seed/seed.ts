@@ -74,6 +74,9 @@ interface DemoUser {
 }
 
 const DEMO_USERS: DemoUser[] = [
+  { email: 'akileshanand302006@gmail.com', firstName: 'Akilesh', lastName: 'Anand', role: 'system_admin' },
+  { email: 'doctordoom3056@gmail.com', firstName: 'Doctor', lastName: 'Doom', role: 'manager', deptCode: 'ROAD' },
+  { email: 'steverogers302006@gmail.com', firstName: 'Steve', lastName: 'Rogers', role: 'field_worker', deptCode: 'ROAD' },
   { email: 'citizen@civicpulse.demo', firstName: 'Priya', lastName: 'Sharma', role: 'citizen' },
   { email: 'worker@civicpulse.demo', firstName: 'Rajesh', lastName: 'Kumar', role: 'field_worker', deptCode: 'ROAD' },
   { email: 'officer@civicpulse.demo', firstName: 'Anita', lastName: 'Patel', role: 'officer', deptCode: 'ROAD' },
@@ -607,6 +610,67 @@ export async function runDatabaseSeed(): Promise<void> {
   logger.info(`║  Verified Personas: ${DEMO_USERS.length}`);
   logger.info(`║  Master Passcode: ${DEMO_PASSWORD}`);
   logger.info('╚══════════════════════════════════════════════════╝');
+}
+
+/**
+ * Ensures the three critical configured role accounts exist in MongoDB Atlas.
+ * Runs idempotently on server bootstrap.
+ */
+export async function ensureConfiguredRoleAccounts(): Promise<void> {
+  try {
+    const org = await Organization.findOne({ slug: 'metropolis', isActive: true });
+    if (!org) return;
+
+    const passwordHash = await argon2.hash(DEMO_PASSWORD, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+      parallelism: 4,
+    });
+
+    const targetUsers: DemoUser[] = [
+      { email: 'akileshanand302006@gmail.com', firstName: 'Akilesh', lastName: 'Anand', role: 'system_admin' },
+      { email: 'doctordoom3056@gmail.com', firstName: 'Doctor', lastName: 'Doom', role: 'manager', deptCode: 'ROAD' },
+      { email: 'steverogers302006@gmail.com', firstName: 'Steve', lastName: 'Rogers', role: 'field_worker', deptCode: 'ROAD' },
+    ];
+
+    for (const tu of targetUsers) {
+      await User.findOneAndUpdate(
+        { email: tu.email },
+        {
+          $setOnInsert: {
+            organizationId: org._id,
+            email: tu.email,
+            passwordHash,
+            profile: {
+              firstName: tu.firstName,
+              lastName: tu.lastName,
+            },
+            role: tu.role,
+            permissions: ROLE_PERMISSIONS[tu.role] || [],
+            trust: {
+              score: 95,
+              verifiedReports: 20,
+              falseReports: 0,
+              spamFlags: 0,
+              lastUpdated: new Date(),
+            },
+            security: {
+              mfaEnabled: false,
+              emailVerified: true,
+              failedLoginAttempts: 0,
+              lastPasswordChange: new Date(),
+            },
+            isActive: true,
+          },
+        },
+        { upsert: true }
+      );
+    }
+    logger.info('✅ Verified configured role accounts for Civiora production');
+  } catch (err: any) {
+    logger.warn({ err: err.message }, 'Configured role account verification notice');
+  }
 }
 
 // Execute directly if run as main

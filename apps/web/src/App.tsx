@@ -16,16 +16,20 @@ import { ReportIncidentPage } from './pages/citizen/ReportIncidentPage';
 import { LiveCityMapPage } from './pages/map/LiveCityMapPage';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { ProtectedRoute, LocationRequiredRoute } from './components/guards/ProtectedRoute';
+import { GlassNotificationCapsule } from './design-system/components/GlassNotificationCapsule';
+import { useToastStore } from './stores/toastStore';
 
 export const App: React.FC = () => {
   const { initialize } = useAuthStore();
+  const { toasts, removeToast } = useToastStore();
 
   useEffect(() => {
     initialize();
   }, [initialize]);
 
   return (
-    <Routes>
+    <>
+      <Routes>
       <Route element={<PublicLayout />}>
         {/* ── Public Routes (Freely Accessible) ─────────────── */}
         <Route path="/" element={<LandingPage />} />
@@ -80,6 +84,8 @@ export const App: React.FC = () => {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
+    <GlassNotificationCapsule notifications={toasts} onDismiss={removeToast} />
+  </>
   );
 };
 

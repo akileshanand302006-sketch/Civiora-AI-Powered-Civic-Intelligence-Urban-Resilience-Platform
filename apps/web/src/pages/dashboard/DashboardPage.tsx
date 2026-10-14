@@ -25,6 +25,7 @@ import {
   type ReportFormat,
 } from '@civicpulse/shared';
 import { downloadReportFile } from '../../utils/downloadReport';
+import { toast } from '../../stores/toastStore';
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuthStore();
@@ -211,12 +212,13 @@ export const DashboardPage: React.FC = () => {
         prev.map((inc) => ((inc._id || inc.id) === incidentId ? res.data.data : inc))
       );
 
+      toast.success('Operational Update Saved', `Record for #${selectedIncident.incidentNumber} updated.`);
       setSelectedIncident(null);
       setActionNotes('');
       setAssignedWorker('');
     } catch (err: any) {
       const msg = err.response?.data?.error?.message || 'Failed to update status. Check permissions.';
-      alert(msg);
+      toast.error('Update Failed', msg);
     } finally {
       setUpdating(false);
     }
@@ -240,7 +242,7 @@ export const DashboardPage: React.FC = () => {
       });
     } catch (err: any) {
       console.error('Download error:', err);
-      alert(err.message || 'File download failed. If this is a resolution document, it is only available after resolution verification is approved.');
+      toast.error('Download Failed', err.message || 'File download failed. If this is a resolution document, it is only available after resolution verification is approved.');
     } finally {
       setDownloadingKey(null);
     }
@@ -258,8 +260,10 @@ export const DashboardPage: React.FC = () => {
       setIncidents((prev) =>
         prev.map((i) => ((i._id || i.id) === incId ? { ...i, status: 'in_progress' } : i))
       );
+      const timeStr = new Date(res.data.data.startedAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      toast.success('Work Session Started', `Active repair clock initiated at ${timeStr}.`);
     } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Could not start work session');
+      toast.error('Cannot Start Work', err.response?.data?.error?.message || 'This incident cannot start work in its current state. Refresh the incident and try again.');
     } finally {
       setSessionLoading(false);
     }
@@ -273,8 +277,9 @@ export const DashboardPage: React.FC = () => {
     try {
       const res = await api.post(`/operations/work/${workSession._id || workSession.id}/pause`, { reason: reason.trim() });
       setWorkSession(res.data.data);
+      toast.info('Work Paused', `Session paused: ${reason.trim()}`);
     } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Could not pause work');
+      toast.error('Pause Failed', err.response?.data?.error?.message || 'Could not pause work');
     } finally {
       setSessionLoading(false);
     }
@@ -286,8 +291,9 @@ export const DashboardPage: React.FC = () => {
     try {
       const res = await api.post(`/operations/work/${workSession._id || workSession.id}/resume`);
       setWorkSession(res.data.data);
+      toast.success('Work Resumed', 'Active repair clock resumed.');
     } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Could not resume work');
+      toast.error('Resume Failed', err.response?.data?.error?.message || 'Could not resume work');
     } finally {
       setSessionLoading(false);
     }
@@ -296,7 +302,7 @@ export const DashboardPage: React.FC = () => {
   const handleCompleteWork = async () => {
     if (!workSession) return;
     if (!completionSummary.trim()) {
-      alert('Please enter a completion summary of the repairs executed.');
+      toast.warning('Summary Required', 'Please enter a completion summary of the repairs executed.');
       return;
     }
     setSessionLoading(true);
@@ -312,9 +318,9 @@ export const DashboardPage: React.FC = () => {
       setIncidents((prev) =>
         prev.map((i) => ((i._id || i.id) === incId ? { ...i, status: 'awaiting_verification' } : i))
       );
-      alert('Work completed and submitted to Municipal Command for verification!');
+      toast.success('Work Completed', 'Repair evidence submitted to Municipal Command for verification.');
     } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Could not complete work session');
+      toast.error('Completion Failed', err.response?.data?.error?.message || 'Could not complete work session');
     } finally {
       setSessionLoading(false);
     }
@@ -334,9 +340,9 @@ export const DashboardPage: React.FC = () => {
       setIncidents((prev) =>
         prev.map((i) => ((i._id || i.id) === incId ? updatedInc : i))
       );
-      alert('Resolution approved! Official resolution PDF generated and email dispatched.');
+      toast.success('Resolution Approved', 'Official resolution PDF generated and multi-role notification dispatched.');
     } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Could not approve resolution');
+      toast.error('Approval Failed', err.response?.data?.error?.message || 'Could not approve resolution');
     } finally {
       setVerifying(false);
     }
@@ -357,9 +363,9 @@ export const DashboardPage: React.FC = () => {
       setIncidents((prev) =>
         prev.map((i) => ((i._id || i.id) === incId ? updatedInc : i))
       );
-      alert('Rework requested. Incident returned to In Progress state.');
+      toast.warning('Rework Requested', 'Incident returned to In Progress state for remediation.');
     } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Could not reject resolution');
+      toast.error('Rejection Failed', err.response?.data?.error?.message || 'Could not reject resolution');
     } finally {
       setVerifying(false);
     }
@@ -524,7 +530,7 @@ export const DashboardPage: React.FC = () => {
               variant="danger"
               size="md"
               icon="telephone-fill"
-              onClick={() => alert('Emergency Hotline connected. All department dispatches notified.')}
+              onClick={() => toast.emergency('Crisis Hotline Connected', 'All municipal crisis dispatches and responders notified.')}
             >
               Crisis Hotline
             </GlassButton>

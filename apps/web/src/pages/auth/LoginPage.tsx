@@ -33,8 +33,8 @@ const ROLES: RoleOption[] = [
   {
     role: 'field_worker',
     title: 'Field Worker',
-    defaultName: 'Rajesh Kumar',
-    email: 'worker@civicpulse.demo',
+    defaultName: 'Steve Rogers',
+    email: 'steverogers302006@gmail.com',
     icon: 'tools',
     color: '#FF9F0A',
     themeDescription: 'Field Telemetry & Work Orders',
@@ -51,8 +51,8 @@ const ROLES: RoleOption[] = [
   {
     role: 'department_manager',
     title: 'Department Manager',
-    defaultName: 'Vikram Singh',
-    email: 'manager@civicpulse.demo',
+    defaultName: 'Doctor Doom',
+    email: 'doctordoom3056@gmail.com',
     icon: 'speedometer2',
     color: '#30D158',
     themeDescription: 'Operations, Hotspots & Analytics',
@@ -87,8 +87,8 @@ const ROLES: RoleOption[] = [
   {
     role: 'system_admin',
     title: 'System Admin',
-    defaultName: 'Suresh Menon',
-    email: 'admin@civicpulse.demo',
+    defaultName: 'Akilesh Anand',
+    email: 'akileshanand302006@gmail.com',
     icon: 'cpu-fill',
     color: '#BF5AF2',
     themeDescription: 'Full Node Infrastructure & Security',
@@ -112,13 +112,28 @@ export const LoginPage: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<RoleTheme>('citizen');
   const [fullName, setFullName] = useState('Priya Sharma');
   const [email, setEmail] = useState('citizen@civicpulse.demo');
-  const [password, setPassword] = useState('CivicPulse@2026');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [orgSlug, setOrgSlug] = useState('metropolis');
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'waking'>('checking');
+
+  const checkServerHealth = async () => {
+    try {
+      setServerStatus('checking');
+      await api.get('/health', { timeout: 15000 });
+      setServerStatus('online');
+    } catch {
+      setServerStatus('waking');
+    }
+  };
+
+  useEffect(() => {
+    checkServerHealth();
+  }, []);
 
   useEffect(() => {
     const emailParam = searchParams.get('email');
@@ -136,13 +151,17 @@ export const LoginPage: React.FC = () => {
     setSelectedRole(r.role);
     setFullName(r.defaultName);
     setEmail(r.email);
-    setPassword('CivicPulse@2026');
+    setPassword(''); // Secure default: never prefill plaintext passwords
     setOrgSlug('metropolis');
     setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!password) {
+      setError('Please enter your password or the standard demo passcode: CivicPulse@2026');
+      return;
+    }
     setError(null);
     setLoading(true);
 
@@ -185,11 +204,12 @@ export const LoginPage: React.FC = () => {
       let msg = err.response?.data?.error?.message;
       if (!msg) {
         if (!err.response) {
-          msg = 'Cannot reach backend server. Please verify your backend service is running and CORS is enabled.';
+          msg = 'Connecting to backend... Render free-tier services sleep after inactivity and require ~30s to spin up. Please click "Ping Backend Health" below.';
+          setServerStatus('waking');
         } else if (err.response.status === 404) {
           msg = 'Backend API endpoint not found (404). Ensure VITE_API_URL is configured in your Vercel Environment Variables and redeploy.';
         } else if (err.response.status === 401) {
-          msg = 'Authentication failed: Invalid email or password. Use demo persona credentials or create a new profile below.';
+          msg = 'Authentication failed: Invalid email or password. Use demo persona credentials (CivicPulse@2026) or create a new profile below.';
         } else {
           msg = `Server returned status ${err.response.status}. Please check backend logs.`;
         }
@@ -299,6 +319,54 @@ export const LoginPage: React.FC = () => {
                       }}
                     >
                       AI OS
+                    </span>
+                    <span
+                      className="badge rounded-pill"
+                      title={
+                        serverStatus === 'online'
+                          ? 'Backend API is connected and responding'
+                          : serverStatus === 'waking'
+                          ? 'Backend service is warming up from sleep (Render free tier)'
+                          : 'Checking backend status...'
+                      }
+                      style={{
+                        background:
+                          serverStatus === 'online'
+                            ? 'rgba(48, 209, 88, 0.15)'
+                            : serverStatus === 'waking'
+                            ? 'rgba(255, 159, 10, 0.15)'
+                            : 'rgba(100, 210, 255, 0.15)',
+                        border: `1px solid ${
+                          serverStatus === 'online'
+                            ? 'rgba(48, 209, 88, 0.4)'
+                            : serverStatus === 'waking'
+                            ? 'rgba(255, 159, 10, 0.4)'
+                            : 'rgba(100, 210, 255, 0.4)'
+                        }`,
+                        color:
+                          serverStatus === 'online'
+                            ? '#30D158'
+                            : serverStatus === 'waking'
+                            ? '#FF9F0A'
+                            : '#64D2FF',
+                        fontSize: '0.65rem',
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      <i
+                        className={`bi bi-${
+                          serverStatus === 'online'
+                            ? 'check-circle-fill'
+                            : serverStatus === 'waking'
+                            ? 'hourglass-split'
+                            : 'arrow-repeat'
+                        } me-1`}
+                      />
+                      {serverStatus === 'online'
+                        ? 'API LIVE'
+                        : serverStatus === 'waking'
+                        ? 'API WAKING'
+                        : 'CONNECTING'}
                     </span>
                   </div>
                 </div>
@@ -412,15 +480,31 @@ export const LoginPage: React.FC = () => {
               <div className="col-12 col-md-7 ps-md-4">
                 {error && (
                   <div
-                    className="alert py-2 px-3 small d-flex align-items-center gap-2 mb-3 rounded-3"
+                    className="alert py-2 px-3 small d-flex flex-column gap-2 mb-3 rounded-3"
                     style={{
                       background: 'rgba(255, 69, 58, 0.15)',
                       border: '1px solid rgba(255, 69, 58, 0.4)',
                       color: '#FF453A',
                     }}
                   >
-                    <i className="bi bi-exclamation-octagon-fill" />
-                    <span>{error}</span>
+                    <div className="d-flex align-items-center gap-2">
+                      <i className="bi bi-exclamation-octagon-fill" />
+                      <span>{error}</span>
+                    </div>
+                    <div className="d-flex align-items-center gap-2 mt-1">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-light py-0 px-2"
+                        style={{ fontSize: '0.75rem', borderColor: 'rgba(255, 255, 255, 0.3)' }}
+                        onClick={() => {
+                          setError(null);
+                          checkServerHealth();
+                        }}
+                      >
+                        <i className="bi bi-arrow-clockwise me-1" />
+                        Ping Backend Health
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -451,6 +535,7 @@ export const LoginPage: React.FC = () => {
                     icon="key"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    helperText="Demo accounts standard passcode: CivicPulse@2026"
                     rightElement={
                       <button
                         type="button"

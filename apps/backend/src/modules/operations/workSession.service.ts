@@ -12,7 +12,8 @@ import { Assignment } from './assignment.model.js';
 import { recordChainedIncidentEvent } from '../incidents/incidentEvent.model.js';
 import { Notification } from '../notifications/notification.model.js';
 import { User } from '../users/user.model.js';
-import { BadRequestError, NotFoundError, ForbiddenError } from '../../utils/errors.js';
+import { BadRequestError, NotFoundError, ForbiddenError, ValidationError } from '../../utils/errors.js';
+import { dispatchIncidentLifecycleNotification } from '../notifications/emailNotification.service.js';
 import { logger } from '../../utils/logger.js';
 import { emitToOrg } from '../../socket/socketServer.js';
 import { SOCKET_EVENTS } from '@civicpulse/shared';
@@ -60,18 +61,33 @@ export async function startWorkSession(
     throw new NotFoundError('Incident');
   }
 
-  // Security Check: Only assigned worker or system admin can start work
+  // Verify state allows starting work
+  const disallowedStates = ['resolved', 'closed', 'rejected'];
+  if (disallowedStates.includes(incident.status)) {
+    throw new ValidationError(
+      `Cannot start work on an incident that is currently '${incident.status}'.`,
+      {
+        currentState: incident.status,
+        allowedStates: ['assigned', 'accepted', 'in_progress', 'triaged', 'verified', 'reported'],
+      }
+    );
+  }
+
+  // Security Check: Assigned worker, active assignment, or administrative staff
   const isAssigned = incident.assignedTo && String(incident.assignedTo) === workerIdStr;
   const isWorkerAssignment = await Assignment.findOne({
     incidentId: incident._id,
     assignedTo: new Types.ObjectId(workerIdStr),
   });
 
-  if (!isAssigned && !isWorkerAssignment) {
+  const callerUser = await User.findById(workerIdStr).select('role profile email');
+  const isPrivilegedStaff = callerUser && ['system_admin', 'manager', 'officer'].includes(callerUser.role);
+
+  if (!isAssigned && !isWorkerAssignment && !isPrivilegedStaff) {
     throw new ForbiddenError('You are not authorized to start work on an incident that is not assigned to you.');
   }
 
-  // Check if an active session already exists for this incident
+  // Idempotent Check: If an active/paused session already exists for this incident, return it immediately
   const existingActive = await WorkSession.findOne({
     incidentId: incident._id,
     sessionStatus: { $in: ['active', 'paused'] },
@@ -136,6 +152,15 @@ export async function startWorkSession(
 
   emitToOrg(String(incident.organizationId), SOCKET_EVENTS.INCIDENT_UPDATED, incident.toJSON());
   logger.info({ incidentId: incident._id, workSessionId, workerId: workerIdStr }, 'Work session started');
+
+  // Trigger automated work start role notifications via Resend
+  dispatchIncidentLifecycleNotification({
+    incident,
+    eventType: 'WORK_STARTED',
+    actorName: callerUser ? `${callerUser.profile?.firstName} ${callerUser.profile?.lastName}`.trim() : undefined,
+  }).catch((emailErr) => {
+    logger.warn({ err: emailErr.message }, '[startWorkSession] Automated work start email notice');
+  });
 
   return workSession;
 }
@@ -386,6 +411,15 @@ export async function completeWorkSession(
     }
 
     emitToOrg(String(incident.organizationId), SOCKET_EVENTS.INCIDENT_UPDATED, incident.toJSON());
+
+    // Trigger automated work completed role notifications via Resend
+    dispatchIncidentLifecycleNotification({
+      incident,
+      eventType: 'WORK_COMPLETED',
+      notes: data.completionSummary,
+    }).catch((emailErr) => {
+      logger.warn({ err: emailErr.message }, '[completeWorkSession] Automated work complete email notice');
+    });
   }
 
   logger.info(
