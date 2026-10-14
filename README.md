@@ -17,8 +17,6 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-Database-47A248?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 [![Docker](https://img.shields.io/badge/Docker-Containerization-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
 
-[🌐 Live Demo](https://civioraai.vercel.app/) · [✨ Features](#-platform-capabilities) · [🏗️ Architecture](#-system-architecture) · [🧠 AI Models](#-ai--machine-learning) · [🚀 Setup](#-local-development-setup)
-
 </div>
 
 ---
