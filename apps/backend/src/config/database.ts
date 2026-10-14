@@ -72,6 +72,20 @@ export async function connectDatabase(): Promise<typeof mongoose> {
 
     return conn;
   } catch (err: any) {
+    if (err.code === 8000 || err.message?.includes('bad auth') || err.message?.includes('authentication failed')) {
+      console.error('\n' + '='.repeat(70));
+      console.error('🚨 CIVIORA — MONGODB ATLAS AUTHENTICATION ERROR (Code 8000)');
+      console.error('='.repeat(70));
+      console.error('MongoDB Atlas rejected the database credentials in apps/backend/.env.');
+      console.error('\nQuick 30-second fix:');
+      console.error('1. Open your MongoDB Atlas browser tab (civiora-db)');
+      console.error('2. Navigate to: Security → Database Access');
+      console.error('3. Find "akileshanand302006_db_user" (or your active user), click "Edit" → "Edit Password"');
+      console.error('4. Update MONGODB_URI in apps/backend/.env with your password:');
+      console.error('   MONGODB_URI=mongodb+srv://<USER>:<PASSWORD>@civiora-db.se5b7wx.mongodb.net/civiora?retryWrites=true&w=majority');
+      console.error('='.repeat(70) + '\n');
+    }
+
     logger.fatal(
       {
         error: err.message,

@@ -246,19 +246,36 @@ export const PublicNavbar: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <Link to="/login" className="text-decoration-none flex-shrink-0">
-                <button
-                  className="btn btn-sm rounded-pill px-2 px-sm-3 py-1 fw-semibold text-white"
-                  style={{
-                    fontSize: '0.8rem',
-                    background: 'radial-gradient(100% 100% at 50% 0%, #6392DF 0%, #375994 100%)',
-                    border: '1px solid rgba(159, 201, 255, 0.45)',
-                    boxShadow: 'inset 0 1px 1px 0 rgba(255, 255, 255, 0.4), 0 0 16px rgba(82, 127, 199, 0.3)',
-                  }}
-                >
-                  Sign In
-                </button>
-              </Link>
+              <div className="d-flex align-items-center gap-1 gap-sm-2 flex-shrink-0">
+                <Link to="/register" className="text-decoration-none d-none d-sm-inline-block">
+                  <button
+                    className="btn btn-sm rounded-pill px-2 px-sm-3 py-1 fw-semibold"
+                    style={{
+                      fontSize: '0.8rem',
+                      color: '#9FC9FF',
+                      background: 'rgba(82, 127, 199, 0.15)',
+                      border: '1px solid rgba(159, 201, 255, 0.35)',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <i className="bi bi-person-plus me-1" />
+                    Register
+                  </button>
+                </Link>
+                <Link to="/login" className="text-decoration-none">
+                  <button
+                    className="btn btn-sm rounded-pill px-2 px-sm-3 py-1 fw-semibold text-white"
+                    style={{
+                      fontSize: '0.8rem',
+                      background: 'radial-gradient(100% 100% at 50% 0%, #6392DF 0%, #375994 100%)',
+                      border: '1px solid rgba(159, 201, 255, 0.45)',
+                      boxShadow: 'inset 0 1px 1px 0 rgba(255, 255, 255, 0.4), 0 0 16px rgba(82, 127, 199, 0.3)',
+                    }}
+                  >
+                    Sign In
+                  </button>
+                </Link>
+              </div>
             )}
           </div>
         </GlassSurface>

@@ -3,7 +3,7 @@ import React from 'react';
 export interface GlassInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
-  helperText?: string;
+  helperText?: React.ReactNode;
   icon?: string;
   rightElement?: React.ReactNode;
   containerClassName?: string;

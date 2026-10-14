@@ -112,7 +112,7 @@ export const LoginPage: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<RoleTheme>('citizen');
   const [fullName, setFullName] = useState('Priya Sharma');
   const [email, setEmail] = useState('citizen@civicpulse.demo');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState('CivicPulse@2026');
   const [showPassword, setShowPassword] = useState(false);
   const [orgSlug, setOrgSlug] = useState('metropolis');
 
@@ -126,6 +126,7 @@ export const LoginPage: React.FC = () => {
       setServerStatus('checking');
       await api.get('/health', { timeout: 15000 });
       setServerStatus('online');
+      setError((prev) => (prev?.includes('Render free-tier') ? null : prev));
     } catch {
       setServerStatus('waking');
     }
@@ -151,7 +152,7 @@ export const LoginPage: React.FC = () => {
     setSelectedRole(r.role);
     setFullName(r.defaultName);
     setEmail(r.email);
-    setPassword(''); // Secure default: never prefill plaintext passwords
+    setPassword('CivicPulse@2026'); // Standard demo passcode automatically prefilled for instant testing
     setOrgSlug('metropolis');
     setError(null);
   };
@@ -159,7 +160,7 @@ export const LoginPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password) {
-      setError('Please enter your password or the standard demo passcode: CivicPulse@2026');
+      setError('Please enter your password or click "Auto-fill Passcode" (CivicPulse@2026)');
       return;
     }
     setError(null);
@@ -209,7 +210,7 @@ export const LoginPage: React.FC = () => {
         } else if (err.response.status === 404) {
           msg = 'Backend API endpoint not found (404). Ensure VITE_API_URL is configured in your Vercel Environment Variables and redeploy.';
         } else if (err.response.status === 401) {
-          msg = 'Authentication failed: Invalid email or password. Use demo persona credentials (CivicPulse@2026) or create a new profile below.';
+          msg = 'Authentication failed: Invalid email or password. Use demo persona credentials (CivicPulse@2026) or register a new citizen profile below.';
         } else {
           msg = `Server returned status ${err.response.status}. Please check backend logs.`;
         }
@@ -226,20 +227,22 @@ export const LoginPage: React.FC = () => {
       style={{
         position: 'relative',
         width: '100vw',
-        height: '100vh',
-        overflow: 'hidden',
+        minHeight: '100vh',
+        overflowX: 'hidden',
+        overflowY: 'auto',
         background: '#070A10',
       }}
     >
       {/* ── Background Layer: Full Screen Interactive 3D City ─── */}
       <div
         style={{
-          position: 'absolute',
+          position: 'fixed',
           inset: 0,
           zIndex: 1,
           opacity: isTransitioning ? 0.3 : 1,
           transform: isTransitioning ? 'scale(1.1)' : 'scale(1)',
           transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
+          pointerEvents: 'none',
         }}
       >
         <CityScene role={selectedRole} />
@@ -248,7 +251,7 @@ export const LoginPage: React.FC = () => {
       {/* ── Atmosphere Vignette Overlay ─────────────────────── */}
       <div
         style={{
-          position: 'absolute',
+          position: 'fixed',
           inset: 0,
           background:
             'radial-gradient(circle at 50% 50%, rgba(7, 10, 16, 0.4) 0%, rgba(7, 10, 16, 0.85) 100%)',
@@ -259,7 +262,7 @@ export const LoginPage: React.FC = () => {
 
       {/* ── Foreground Layer: Floating Spatial Glass Auth Console */}
       <div
-        className="d-flex align-items-center justify-content-center h-100 px-3 py-4"
+        className="d-flex align-items-center justify-content-center min-vh-100 px-3 py-5"
         style={{ position: 'relative', zIndex: 10 }}
       >
         <div
@@ -282,6 +285,38 @@ export const LoginPage: React.FC = () => {
                 '0 30px 90px rgba(0, 0, 0, 0.8), 0 0 60px rgba(10, 132, 255, 0.25)',
             }}
           >
+            {/* Top Navigation Mode Pill: Sign In vs Register */}
+            <div className="d-flex align-items-center justify-content-center gap-2 mb-4">
+              <button
+                type="button"
+                className="btn btn-sm rounded-pill px-4 py-1 fw-bold text-white shadow-sm"
+                style={{
+                  background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+                  border: '1px solid rgba(147, 197, 253, 0.5)',
+                  fontSize: '0.85rem',
+                  letterSpacing: '0.03em',
+                }}
+              >
+                <i className="bi bi-box-arrow-in-right me-1" />
+                Sign In to Console
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/register')}
+                className="btn btn-sm rounded-pill px-4 py-1 fw-bold"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  border: '1px solid rgba(255, 255, 255, 0.18)',
+                  color: '#9FC9FF',
+                  fontSize: '0.85rem',
+                  letterSpacing: '0.03em',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <i className="bi bi-person-plus-fill me-1" />
+                Register New Citizen
+              </button>
+            </div>
             {/* Top Brand & Purpose Header */}
             <div className="text-center mb-4">
               <div className="d-inline-flex align-items-center gap-2 mb-2">
@@ -535,7 +570,25 @@ export const LoginPage: React.FC = () => {
                     icon="key"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    helperText="Demo accounts standard passcode: CivicPulse@2026"
+                    helperText={
+                      <div className="d-flex align-items-center justify-content-between mt-1">
+                        <span className="text-secondary" style={{ fontSize: '0.74rem' }}>
+                          Demo Passcode: <code className="text-primary font-monospace">CivicPulse@2026</code>
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-link p-0 text-decoration-none fw-semibold"
+                          style={{ fontSize: '0.75rem', color: '#9FC9FF' }}
+                          onClick={() => {
+                            setPassword('CivicPulse@2026');
+                            setError(null);
+                          }}
+                        >
+                          <i className="bi bi-magic me-1" />
+                          Auto-fill Passcode
+                        </button>
+                      </div>
+                    }
                     rightElement={
                       <button
                         type="button"
@@ -570,20 +623,38 @@ export const LoginPage: React.FC = () => {
                   </GlassButton>
                 </form>
 
-                <div className="mt-3 text-center d-flex flex-column gap-2">
-                  <span className="text-secondary small">
-                    All demo accounts use passcode:{' '}
-                    <code className="text-primary font-monospace">CivicPulse@2026</code>
-                  </span>
-                  <div className="small text-secondary">
-                    Need a new citizen account?{' '}
-                    <span
-                      onClick={() => navigate('/register')}
-                      style={{ color: '#9FC9FF', cursor: 'pointer', textDecoration: 'underline' }}
-                    >
-                      Create Citizen Profile
-                    </span>
+                {/* High-Visibility Citizen Registration Card */}
+                <div
+                  className="mt-3 p-3 rounded-4 d-flex flex-column flex-sm-row align-items-center justify-content-between gap-3"
+                  style={{
+                    background: 'rgba(10, 132, 255, 0.08)',
+                    border: '1px solid rgba(159, 201, 255, 0.25)',
+                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+                  }}
+                >
+                  <div className="text-center text-sm-start">
+                    <div className="fw-bold text-white" style={{ fontSize: '0.85rem' }}>
+                      Don't have an account?
+                    </div>
+                    <div className="text-secondary" style={{ fontSize: '0.74rem' }}>
+                      Register as a new Citizen to submit reports & track local incidents
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/register')}
+                    className="btn btn-sm rounded-pill px-3 py-2 fw-bold text-nowrap flex-shrink-0"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(82, 127, 199, 0.4), rgba(16, 33, 58, 0.85))',
+                      border: '1px solid rgba(159, 201, 255, 0.45)',
+                      color: '#FFFFFF',
+                      fontSize: '0.8rem',
+                      boxShadow: '0 0 15px rgba(82, 127, 199, 0.35)',
+                    }}
+                  >
+                    <i className="bi bi-person-plus-fill me-1" />
+                    Create Citizen Profile
+                  </button>
                 </div>
               </div>
             </div>
