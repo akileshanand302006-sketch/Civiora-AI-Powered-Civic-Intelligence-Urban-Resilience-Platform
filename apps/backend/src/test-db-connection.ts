@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 // Set public DNS servers to resolve MongoDB SRV records reliably on Windows
 dns.setServers(['8.8.8.8', '1.1.1.1']);
 
-const uri = 'mongodb+srv://akileshanand302006_db_user:ihFDsbZcewnLkfiC@civiora-db.se5b7wx.mongodb.net/civiora?retryWrites=true&w=majority&appName=civiora-db';
+const uri = 'mongodb+srv://akileshanand302006_db_user:7hGVHRooRGwvPA2o@civiora-db.se5b7wx.mongodb.net/civiora?retryWrites=true&w=majority&appName=civiora-db';
 
 async function testConnection() {
   console.log('Testing SRV resolution with Google/Cloudflare DNS...');
